@@ -103,7 +103,10 @@ build_recent.py recent.html 相关构建脚本
 - Nginx / Apache 示例配置
 - 数据目录与生成目录边界说明
 
-目前仓库已提供基础部署说明文件：[DEPLOY.md](DEPLOY.md)
+目前仓库已提供文档：
+
+- [DEPLOY.md](DEPLOY.md)
+- [CONFIG.md](CONFIG.md)
 
 ## 仓库状态
 
