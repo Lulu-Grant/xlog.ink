@@ -481,14 +481,6 @@ input:focus, textarea:focus, select:focus {
   font-weight: 600;
   font-size: 14px;
 }
-.xlog-footer-links {
-  margin-top: 6px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  flex-wrap: wrap;
-}
 .footer-icon-link {
   display: inline-flex;
   align-items: center;
@@ -508,7 +500,13 @@ input:focus, textarea:focus, select:focus {
   display: block;
   fill: currentColor;
 }
-.xlog-footer-cta { margin-top: 4px; }
+.xlog-footer-cta {
+  margin-top: 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+}
 .xlog-footer-meta {
   margin-top: 6px;
   font-size: 12px;
