@@ -494,17 +494,24 @@ input:focus, textarea:focus, select:focus {
   align-items: center;
   gap: 6px;
   color: var(--muted);
+  font-size: 13px;
+  line-height: 1;
   text-decoration: none;
 }
 .footer-icon-link:hover {
   color: var(--accent);
   text-decoration: none;
 }
-.footer-icon-link svg {
-  width: 15px;
-  height: 15px;
+.footer-icon-link__icon {
+  width: 14px;
+  height: 14px;
+  min-width: 14px;
+  flex: 0 0 14px;
   display: block;
   fill: currentColor;
+}
+.footer-icon-link span {
+  line-height: 1;
 }
 .xlog-footer-cta { margin-top: 4px; }
 .xlog-footer-meta {
