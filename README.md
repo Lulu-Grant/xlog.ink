@@ -77,6 +77,7 @@ build_recent.py recent.html 相关构建脚本
 - PHP helper 与 Markdown 核心逻辑
 - Turnstile 在未配置 secret 时的失败路径
 - `build_recent.py` 的索引读取与输出排序
+- PHP 内置服务器下的关键 HTTP smoke test
 
 运行方式：
 
