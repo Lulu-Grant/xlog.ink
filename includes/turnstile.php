@@ -7,13 +7,13 @@ require_once __DIR__ . '/response.php';
 function turnstile_site_key() {
     $value = getenv('TURNSTILE_SITE_KEY');
     if ($value !== false && trim($value) !== '') return trim($value);
-    return '0x4AAAAAACyz8Bnvh3fYSsPr';
+    return '';
 }
 
 function turnstile_secret_key() {
     $value = getenv('TURNSTILE_SECRET_KEY');
     if ($value !== false && trim($value) !== '') return trim($value);
-    return '0x4AAAAAACyz8GvsgJ1qDLou9v-3h79zawg';
+    return '';
 }
 
 function turnstile_verify($token, $remoteIp) {
@@ -22,8 +22,13 @@ function turnstile_verify($token, $remoteIp) {
         return ['ok' => false, 'reason' => 'missing-input-response'];
     }
 
+    $secret = turnstile_secret_key();
+    if ($secret === '') {
+        return ['ok' => false, 'reason' => 'turnstile-secret-not-configured'];
+    }
+
     $payload = http_build_query([
-        'secret'   => turnstile_secret_key(),
+        'secret'   => $secret,
         'response' => $token,
         'remoteip' => $remoteIp,
     ]);

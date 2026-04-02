@@ -78,6 +78,7 @@ build_recent.py recent.html 相关构建脚本
 - PHP 运行环境
 - 可写目录权限（用于动态生成流程时，如有需要）
 - 正式域名绑定到服务器
+- 显式配置 `TURNSTILE_SITE_KEY` 与 `TURNSTILE_SECRET_KEY`
 
 也就是说，**GitHub 是代码仓库，xlog.ink 才是实际在线服务**。
 
@@ -101,6 +102,8 @@ build_recent.py recent.html 相关构建脚本
 - 环境变量 / 常量配置说明
 - Nginx / Apache 示例配置
 - 数据目录与生成目录边界说明
+
+目前仓库已提供基础部署说明文件：[DEPLOY.md](DEPLOY.md)
 
 ## 仓库状态
 
