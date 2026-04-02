@@ -4,6 +4,8 @@
 .claude/
 
 tmp-preview/
+memory/
+img/
 
 data/ratelimit/
 site/.build.log
