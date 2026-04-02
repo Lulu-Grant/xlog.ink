@@ -1,0 +1,21 @@
+/* ---------- Recent ---------- */
+.recent-list { padding-left: 20px; }
+.recent-list li {
+  margin: 6px 0;
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+}
+.recent-list a {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.recent-list .text-code,
+.recent-list .code {
+  flex-shrink: 0;
+  font-size: 12px;
+}

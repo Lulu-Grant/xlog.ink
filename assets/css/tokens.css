@@ -1,0 +1,101 @@
+/* ---------- Reset & tokens ---------- */
+* { box-sizing: border-box; min-width: 0; }
+html, body { height: 100%; overflow-x: hidden; }
+img, video, canvas, iframe { max-width: 100%; height: auto; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+:root {
+  --bg-page: #f3f5f9;
+  --bg-surface: #ffffff;
+  --bg-surface-2: #edf1f6;
+  --text-primary: #0e1726;
+  --text-secondary: #607089;
+  --border-subtle: #d8e0ec;
+  --border-strong: #c4cedb;
+  --accent-primary: #2583ff;
+  --accent-soft: #7a6cff;
+
+  --bg: var(--bg-page);
+  --card: var(--bg-surface);
+  --text: var(--text-primary);
+  --muted: var(--text-secondary);
+  --border: var(--border-subtle);
+  --accent: var(--accent-primary);
+  --accent-alt: var(--accent-soft);
+  --accent-ink: #0d4fb3;
+
+  --link: #255ce7;
+  --link-visited: #6252d8;
+
+  --radius-sm: 10px;
+  --radius-md: 16px;
+  --radius-lg: 22px;
+
+  --shadow-sm: 0 4px 14px rgba(14, 23, 38, .045);
+  --shadow-md: 0 14px 30px rgba(14, 23, 38, .075);
+  --shadow: var(--shadow-sm);
+  --panel-glow: var(--shadow-sm);
+
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-6: 24px;
+  --space-8: 32px;
+
+  --gap-lg: 18px;
+  --gap-md: 14px;
+  --gap-sm: 10px;
+
+  --fab-bar: 72px;
+  --page-max: 760px;
+  --page-wide-max: 860px;
+  --page-narrow-max: 640px;
+  --hero-max: 760px;
+  --page-pad-x: 16px;
+  --page-pad-y: 18px;
+}
+
+.theme-dark {
+  --bg-page: #07101d;
+  --bg-surface: #0c1525;
+  --bg-surface-2: #101b2f;
+  --text-primary: #edf3fb;
+  --text-secondary: #8ea0bb;
+  --border-subtle: #1b2940;
+  --border-strong: #263957;
+  --accent-primary: #2ac8ff;
+  --accent-soft: #7a6cff;
+
+  --bg: var(--bg-page);
+  --card: var(--bg-surface);
+  --text: var(--text-primary);
+  --muted: var(--text-secondary);
+  --border: var(--border-subtle);
+  --accent: var(--accent-primary);
+  --accent-alt: var(--accent-soft);
+  --accent-ink: #b7f5ff;
+
+  --link: #99e7ff;
+  --link-visited: #b9a7ff;
+
+  --shadow-sm: 0 8px 22px rgba(0, 0, 0, .22);
+  --shadow-md: 0 18px 38px rgba(0, 0, 0, .3);
+  --shadow: var(--shadow-md);
+  --panel-glow: var(--shadow-sm);
+}
+
+html { font-size: 16px; }
+body {
+  margin: 0;
+  font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI",
+               "PingFang SC","Hiragino Sans GB","Noto Sans CJK SC",
+               "Helvetica Neue", Arial, "Noto Sans", "Noto Sans TC", sans-serif;
+  color: var(--text);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--bg-page), white 2%), var(--bg-page));
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+@media (max-width: 768px) {
+  body { padding-bottom: calc(var(--fab-bar) + env(safe-area-inset-bottom, 0px)); }
+}

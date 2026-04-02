@@ -1,0 +1,12 @@
+.DS_Store
+.idea/
+.codex/
+.claude/
+
+tmp-preview/
+
+data/ratelimit/
+site/.build.log
+
+*.log
+*.tmp

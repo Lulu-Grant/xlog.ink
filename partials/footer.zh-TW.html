@@ -1,0 +1,116 @@
+<!-- XLOG 公共底部模板（所有生成页与主页共用） -->
+<footer id="xlog-footer" class="xlog-footer">
+  <div class="xlog-footer-brand">
+    © <span id="xlog-footer-year"></span>
+    <a href="https://xlog.ink" class="logo-link">XLOG</a>
+    · <span data-i18n="rights">All rights reserved</span>
+  </div>
+
+  <div class="xlog-footer-cta">
+    <a id="xlog-footer-cta" href="/creat.php" class="logo-link"
+       data-i18n="cta">免費建立個人主頁</a>
+  </div>
+
+  <div class="xlog-footer-meta">
+    <div data-i18n="tag1">打造屬於你的專屬頁面，免費二級網域・行動優先・永久不刪除。</div>
+    <div data-i18n="tag2">XLOG — 讓每個人都能擁有屬於自己的首頁。</div>
+  </div>
+</footer>
+
+<script>
+(function(){
+  // 年份
+  var y = document.getElementById('xlog-footer-year');
+  if (y) y.textContent = new Date().getFullYear();
+
+  // 三语文案
+  var I18N = {
+    "zh-TW": {
+      rights: "All rights reserved",
+      cta: "免費建立個人主頁",
+      tag1: "打造屬於你的專屬頁面，免費二級網域・行動優先・永久不刪除。",
+      tag2: "XLOG — 讓每個人都能擁有屬於自己的首頁。"
+    },
+    "zh-CN": {
+      rights: "All rights reserved",
+      cta: "免费建立个人主页",
+      tag1: "打造你的专属页面，免费二级域名 · 移动端优先 · 永久不删除。",
+      tag2: "XLOG —— 让每个人都能拥有自己的首页。"
+    },
+    "en": {
+      rights: "All rights reserved",
+      cta: "Create Your Page for Free",
+      tag1: "Build your own page with a free subdomain · mobile-first · never deleted.",
+      tag2: "XLOG — Everyone deserves a personal homepage."
+    }
+  };
+
+  // 语言检测：window flag → localStorage → <html lang> → zh-TW
+  function detectLang(){
+    return (window.__xlogLang)
+        || localStorage.getItem('landing_lang')
+        || localStorage.getItem('pg_lang')
+        || document.documentElement.getAttribute('lang')
+        || 'zh-TW';
+  }
+
+  function applyLang(lang){
+    var dict = I18N[lang] || I18N['zh-TW'];
+    document.querySelectorAll('#xlog-footer [data-i18n]').forEach(function(el){
+      var key = el.getAttribute('data-i18n');
+      if (dict[key]) el.textContent = dict[key];
+    });
+  }
+
+  var current = detectLang();
+  applyLang(current);
+
+  // —— 动态跟随：监听 <html lang> 变化、可见性切换、以及自定义事件 —— //
+  // 1) <html lang> 变化
+  try {
+    new MutationObserver(function(muts){
+      muts.forEach(function(m){
+        if (m.type === 'attributes' && m.attributeName === 'lang') {
+          var l = detectLang();
+          if (l !== current) { current = l; applyLang(current); }
+        }
+      });
+    }).observe(document.documentElement, { attributes: true });
+  } catch(e){}
+
+  // 2) 可见性变化时同步一次（防止外部脚本晚于 footer 运行）
+  document.addEventListener('visibilitychange', function(){
+    var l = detectLang();
+    if (l !== current) { current = l; applyLang(current); }
+  });
+
+  // 3) 页面若在语言切换时派发自定义事件：window.dispatchEvent(new CustomEvent('xlog:lang-change'))
+  window.addEventListener('xlog:lang-change', function(){
+    var l = detectLang();
+    if (l !== current) { current = l; applyLang(current); }
+  });
+
+  // 4) 跨标签页 localStorage 变化
+  window.addEventListener('storage', function(e){
+    if (e.key === 'landing_lang' || e.key === 'pg_lang') {
+      var l = detectLang();
+      if (l !== current) { current = l; applyLang(current); }
+    }
+  });
+})();
+</script>
+
+<!-- Yandex.Metrika counter -->
+<script type="text/javascript">
+    (function(m,e,t,r,i,k,a){
+        m[i]=m[i]||function(){(m[i].a=m[i].a||[]).push(arguments)};
+        m[i].l=1*new Date();
+        for (var j = 0; j < document.scripts.length; j++) {if (document.scripts[j].src === r) { return; }}
+        k=e.createElement(t),a=e.getElementsByTagName(t)[0],k.async=1,k.src=r,a.parentNode.insertBefore(k,a)
+    })(window, document,'script','https://mc.yandex.ru/metrika/tag.js?id=104804841', 'ym');
+
+    ym(104804841, 'init', {ssr:true, webvisor:true, clickmap:true, ecommerce:"dataLayer", accurateTrackBounce:true, trackLinks:true});
+</script>
+<noscript><div><img src="https://mc.yandex.ru/watch/104804841" class="offscreen-telemetry" alt="" /></div></noscript>
+<!-- /Yandex.Metrika counter -->
+

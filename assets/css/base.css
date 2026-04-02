@@ -1,0 +1,10 @@
+/* Aggregation entrypoint. Keep page templates loading one file while
+   the styles are split into tokens, shared UI, and page-specific layers. */
+@import url("./tokens.css");
+@import url("./ui.css");
+@import url("./page-shared.css");
+@import url("./page-home.css");
+@import url("./page-create.css");
+@import url("./page-manual.css");
+@import url("./page-generated.css");
+@import url("./page-recent.css");

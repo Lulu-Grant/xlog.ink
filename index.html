@@ -1,0 +1,230 @@
+
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+
+  <!-- 初始（繁體）SEO，切換語言後會由 JS 動態更新 -->
+  <title data-seo="title">Xlog｜免費個人主頁創建！</title>
+  <meta name="description" data-seo="desc" content="Xlog 是一個免費個人主頁產生器，提供免費二級網域、行動優先設計、暗/明主題與多語界面。生成後的頁面永久不刪除，適合履歷、作品集、社交名片與宣傳頁。">
+  <meta name="robots" content="index,follow" />
+  <link rel="canonical" href="https://xlog.ink/" />
+
+  <!-- 主題色（明/暗自動） -->
+  <meta name="theme-color" media="(prefers-color-scheme: light)" content="#ffffff">
+  <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#0f1115">
+
+  <!-- Open Graph / Twitter（JS 會同步更新 title/desc） -->
+  <meta property="og:site_name" content="Xlog" />
+  <meta property="og:type" content="website" />
+  <meta property="og:title" data-seo="og:title" content="Xlog｜免費個人主頁產生器｜免費二級網域・行動優先・頁面永久不刪除" />
+  <meta property="og:description" data-seo="og:desc" content="Xlog 是免費個人主頁產生器，提供免費二級網域、行動優先設計與多語界面。生成後的頁面永久不刪除。" />
+  <meta property="og:url" content="https://xlog.ink/" />
+  <meta property="og:image" content="/assets/og/cover.jpg" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" data-seo="tw:title" content="Xlog｜免費個人主頁產生器" />
+  <meta name="twitter:description" data-seo="tw:desc" content="建立屬於你的個人主頁，免費二級網域・行動優先・頁面永久不刪除。" />
+  <meta name="twitter:image" content="/assets/og/cover.jpg" />
+
+  <!-- favicon / PWA -->
+  <link rel="icon" href="/favicon.ico" />
+  <link rel="apple-touch-icon" href="/favicon.ico" sizes="180x180" />
+  <link rel="manifest" href="/site.webmanifest" />
+
+  <link rel="stylesheet" href="/assets/css/base.css" />
+</head>
+<body class="theme-dark page-home">
+  <div class="page-bg-orb"></div><div class="page-bg-grid"></div>
+
+  <div class="container">
+    <header class="page-header" aria-label="Site header">
+      <div class="page-header__title"><a href="/" class="logo-link">XLOG</a></div>
+      <div class="page-header__controls">
+        <label>
+          <span data-i18n="themeLabel">主題</span>
+          <select id="theme" aria-label="Theme">
+            <option value="dark" data-i18n="dark">暗色</option>
+            <option value="light" data-i18n="light">明亮</option>
+          </select>
+        </label>
+        <label>
+          <span data-i18n="langLabel">語言</span>
+          <select id="lang" aria-label="Language">
+            <option value="zh-TW">繁體中文</option>
+            <option value="zh-CN">简体中文</option>
+            <option value="en">English</option>
+          </select>
+        </label>
+      </div>
+    </header>
+    <main class="site-main">
+    <!-- 首屏 -->
+    <section class="page-hero">
+      <div class="hero-kicker" data-i18n="heroKicker">免費發布頁・靜態託管・立即上線</div>
+      <h1 data-i18n="heroTitle">互聯網的便捷，不該只屬於少數人。</h1>
+      <p class="page-hero__lede" data-i18n="heroSubtitle">現在，每個人都能零門檻擁有自己的發布頁面。</p>
+      <p class="page-hero__manifesto" data-i18n="heroManifesto">不用註冊，不用部署，不用學後台，幾分鐘內就能上線。</p>
+      <div class="meta-strip page-hero__proof">
+        <span class="ui-pill" data-i18n="heroPill1">免費建立</span>
+        <span class="ui-pill" data-i18n="heroPill2">永久保留</span>
+        <span class="ui-pill" data-i18n="heroPill3">獨立二級網域</span>
+        <span class="ui-pill" data-i18n="heroPill4">CDN 毫秒級響應</span>
+        <span class="ui-pill" data-i18n="heroPill5">無需註冊</span>
+      </div>
+      <div class="action-group action-group--hero">
+        <a class="button button--accent js-create" href="/creat.php" data-i18n="ctaPrimary">立即建立我的主頁</a>
+        <a class="button button--ghost" href="#showcase" data-i18n="heroSecondary">查看案例</a>
+      </div>
+      <div class="hero-note" data-i18n="heroNote">免費、永久、獨立二級網域，CDN 毫秒級分發。</div>
+    </section>
+
+    <section class="page-section ui-card--plain">
+      <div class="content-grid content-grid--split">
+        <article class="ui-card--feature">
+          <h2 data-i18n="highlightTitle">XLOG 不是建站平台，而是更輕、更快的公開發布方式</h2>
+          <p data-i18n="highlightDesc">它適合那些只想把內容穩定發出去的人。你不需要折騰整套網站，只需要一個可長久分享、打開就像成品的頁面。</p>
+        </article>
+        <div class="content-grid content-grid--metrics" role="list">
+          <div class="ui-card ui-card--metric" role="listitem">
+            <strong data-i18n="metric1Value">10位</strong>
+            <span data-i18n="metric1Label">專屬二級網域</span>
+          </div>
+          <div class="ui-card ui-card--metric" role="listitem">
+            <strong data-i18n="metric2Value">1分鐘</strong>
+            <span data-i18n="metric2Label">完成建立與發佈</span>
+          </div>
+          <div class="ui-card ui-card--metric" role="listitem">
+            <strong data-i18n="metric3Value">3語</strong>
+            <span data-i18n="metric3Label">繁中、简中、English</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="page-section page-why">
+      <div class="page-showcase__header">
+        <h2 data-i18n="whyTitle">為什麼用 XLOG，而不是自己折騰一套？</h2>
+        <p data-i18n="whyDesc">首頁不該是讓你學工具，而是讓你立刻把內容發出去。XLOG 的價值，就是把那些不必要的步驟全部拿掉。</p>
+      </div>
+      <div class="content-grid content-grid--features" role="list">
+        <article class="list-item" role="listitem">
+          <h3 data-i18n="why1Title">不用部署</h3>
+          <p data-i18n="why1Desc">你不需要買伺服器、配環境、接網域，也不用處理上線流程。</p>
+        </article>
+        <article class="list-item" role="listitem">
+          <h3 data-i18n="why2Title">不用學後台</h3>
+          <p data-i18n="why2Desc">沒有 CMS，沒有帳號系統，也沒有複雜設定，打開就能開始建立。</p>
+        </article>
+        <article class="list-item" role="listitem">
+          <h3 data-i18n="why3Title">發出去就是成品</h3>
+          <p data-i18n="why3Desc">你填好的內容會直接生成一個乾淨、穩定、可分享的公開頁面。</p>
+        </article>
+      </div>
+    </section>
+
+    <section class="page-section page-showcase" id="showcase">
+      <div class="page-showcase__header">
+        <h2 data-i18n="showcaseTitle">你發佈出來的頁面，就會是這個樣子</h2>
+        <p data-i18n="showcaseDesc">不是模板示意圖，而是真實生成頁面的展示。完成建立後，你也會得到同樣乾淨、穩定、可以直接分享的成品頁。</p>
+      </div>
+      <div class="showcase-grid">
+        <article class="showcase-card">
+          <div class="showcase-card__media">
+            <img src="/assets/showcase/showcase-mobile-light-links.png" alt="XLOG light link page mobile example" loading="lazy" />
+          </div>
+          <div class="showcase-card__body">
+            <span class="showcase-card__eyebrow" data-i18n="showcaseCase1Type">Light Link Page</span>
+            <h3 data-i18n="showcaseCase1Title">明亮風格的連結頁，適合放公開入口與聯絡方式</h3>
+            <p data-i18n="showcaseCase1Desc">在手機上尤其清楚。作品集、LinkedIn、預約連結與自我介紹，都能集中在一個輕巧的公開頁面。</p>
+            <a class="button button--ghost" href="/site/m4lite7b2q.html" target="_blank" rel="noopener" data-i18n="showcaseViewCase">查看這個案例</a>
+          </div>
+        </article>
+        <article class="showcase-card">
+          <div class="showcase-card__media">
+            <img src="/assets/showcase/showcase-mobile-dark-article.png" alt="XLOG dark article page mobile example" loading="lazy" />
+          </div>
+          <div class="showcase-card__body">
+            <span class="showcase-card__eyebrow" data-i18n="showcaseCase2Type">Dark Article Page</span>
+            <h3 data-i18n="showcaseCase2Title">暗色閱讀頁更適合文章、方法論與專案說明</h3>
+            <p data-i18n="showcaseCase2Desc">如果你想呈現長文內容，暗色版本會更有沉浸感，也很適合在手機上直接閱讀與分享。</p>
+            <a class="button button--ghost" href="/site/m4dark2a1x.html" target="_blank" rel="noopener" data-i18n="showcaseViewCase">查看這個案例</a>
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <section class="page-section page-use">
+      <h2 data-i18n="useTitle">這些人，會特別適合用 XLOG</h2>
+      <div class="content-grid content-grid--features" role="list">
+        <article class="list-item" role="listitem">
+          <h3 data-i18n="u1Title">個人主頁 / Link in Bio</h3>
+          <p data-i18n="u1Desc">把分散在各平台的入口，集中到一個更清晰、更專業的公開頁面。</p>
+        </article>
+        <article class="list-item" role="listitem">
+          <h3 data-i18n="u2Title">履歷 / 作品集</h3>
+          <p data-i18n="u2Desc">給你的經歷、專案與代表作品一個可長久分享的連結。</p>
+        </article>
+        <article class="list-item" role="listitem">
+          <h3 data-i18n="u3Title">文章 / 公告頁</h3>
+          <p data-i18n="u3Desc">不需要部落格系統，也能快速發佈一篇結構清楚的公開內容。</p>
+        </article>
+      </div>
+    </section>
+
+    <section class="page-section page-cta">
+      <div class="page-cta__inner">
+        <span class="hero-kicker" data-i18n="ctaPanelKicker">Start in Minutes</span>
+        <h2 data-i18n="ctaPanelTitle">現在就發布你的第一個頁面</h2>
+        <p data-i18n="ctaPanelDesc">不需要註冊，不需要部署，不需要學習一整套建站工具。填好內容，幾分鐘內就能擁有自己的公開頁面。</p>
+        <div class="action-group">
+          <a class="button button--accent js-create" href="/creat.php" data-i18n="ctaSecondary">立即開始</a>
+          <a class="button button--ghost js-recent" href="/recent.html" data-i18n="ctaTertiary">先看最近建立</a>
+        </div>
+      </div>
+    </section>
+
+    </main>
+    <div id="footer-slot" class="footer-slot"></div>
+  </div>
+
+  <!-- 移动端悬浮 CTA -->
+  <div class="fab">
+    <a class="button button--accent js-create" href="/creat.php" data-i18n="ctaSticky">建立我的主頁 · 免費網域</a>
+  </div>
+
+  <!-- JSON-LD -->
+  <script type="application/ld+json">
+  {
+    "@context":"https://schema.org",
+    "@type":"Organization",
+    "name":"Xlog",
+    "url":"https://xlog.ink/",
+    "logo":"https://xlog.ink/assets/og/cover.jpg",
+    "description":"Xlog 是一個免費個人主頁產生器，提供免費二級網域與行動優先設計。",
+    "brand":{"@type":"Brand","name":"Xlog"}
+  }
+  </script>
+
+  <script src="/assets/js/i18n.js"></script>
+  <script src="/assets/js/app.js"></script>
+  <script>
+  (function () {
+    XLOG.initState();
+    XLOG.applyLang(XLOG.curLang);
+    XLOG.applySEO('seoTitle_home', 'seoDesc_home');
+    XLOG.bindControls({
+      onLangChange: function () {
+        XLOG.applySEO('seoTitle_home', 'seoDesc_home');
+        XLOG.rewriteParamLinks('a.js-create, a.js-manual, a.js-recent');
+      },
+      onThemeChange: function () {
+        XLOG.rewriteParamLinks('a.js-create, a.js-manual, a.js-recent');
+      }
+    });
+    XLOG.loadFooter();
+    XLOG.rewriteParamLinks('a.js-create, a.js-manual, a.js-recent');
+  })();
+  </script>
+</body>
+</html>

@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+
+  <!-- 初始（繁體）SEO，切換語言後由 JS 動態更新 -->
+  <title data-seo="title">Xlog 使用手冊｜建立免費個人主頁與文章頁（Markdown）</title>
+  <meta name="description" data-seo="desc" content="Xlog 使用手冊：兩種建立模式（連結/文章Markdown）、標題≤30、正文≤500/≤5000、預設色塊上色工具、配額限制、二級網域、隱私與安全、SEO 與常見問題。">
+  <meta name="robots" content="index,follow" />
+  <link rel="canonical" href="https://xlog.ink/manual.html" />
+
+  <!-- 顏色（明/暗） -->
+  <meta name="theme-color" media="(prefers-color-scheme: light)" content="#ffffff">
+  <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#0f1115">
+
+  <!-- OG / Twitter（JS 會同步更新 title/desc） -->
+  <meta property="og:site_name" content="Xlog" />
+  <meta property="og:type" content="article" />
+  <meta property="og:title" data-seo="og:title" content="Xlog 使用手冊" />
+  <meta property="og:description" data-seo="og:desc" content="Xlog 使用手冊：兩種建立模式（連結/文章Markdown）、限制與常見問題。" />
+  <meta property="og:url" content="https://xlog.ink/manual.html" />
+  <meta property="og:image" content="/assets/og/cover.jpg" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" data-seo="tw:title" content="Xlog 使用手冊" />
+  <meta name="twitter:description" data-seo="tw:desc" content="建立模式、規範、限制與常見問題。" />
+  <meta name="twitter:image" content="/assets/og/cover.jpg" />
+
+  <link rel="icon" href="/favicon.ico" />
+  <link rel="apple-touch-icon" href="/favicon.ico" sizes="180x180" />
+  <link rel="manifest" href="/site.webmanifest" />
+
+  <link rel="stylesheet" href="/assets/css/base.css" />
+</head>
+<body class="theme-dark page-manual">
+  <div class="page-bg-orb"></div><div class="page-bg-grid"></div>
+
+  <div class="container">
+    <header class="page-header" aria-label="Site header">
+      <div class="page-header__title"><a href="/" class="logo-link">XLOG</a></div>
+      <div class="page-header__controls">
+        <label>
+          <span data-i18n="themeLabel">主題</span>
+          <select id="theme" aria-label="Theme">
+            <option value="dark" data-i18n="dark">暗色</option>
+            <option value="light" data-i18n="light">明亮</option>
+          </select>
+        </label>
+        <label>
+          <span data-i18n="langLabel">語言</span>
+          <select id="lang" aria-label="Language">
+            <option value="zh-TW">繁體中文</option>
+            <option value="zh-CN">简体中文</option>
+            <option value="en">English</option>
+          </select>
+        </label>
+      </div>
+    </header>
+    <main class="site-main">
+    <section class="page-intro">
+      <div class="hero-kicker" data-i18n="manualKicker">Guide · Limits · Publishing Rules</div>
+      <h1 data-i18n="mTitle">Xlog 使用手冊</h1>
+      <p class="text-help" data-i18n="mIntro">本頁提供建立與使用 Xlog 的完整指南、規範與常見問題。</p>
+      <div class="meta-strip">
+        <span class="ui-pill" data-i18n="manualMeta1">連結頁與文章頁</span>
+        <span class="ui-pill" data-i18n="manualMeta2">內容規範與限制</span>
+        <span class="ui-pill" data-i18n="manualMeta3">常見問題與配額</span>
+      </div>
+    </section>
+
+    <div class="page-main-wide manual-prose manual-shell">
+      <section class="page-section manual-section is-centered">
+        <a class="button" id="go-home" href="/" data-i18n="ctaHome">返回首頁</a>
+      </section>
+
+    <!-- 快速上手 -->
+    <section class="page-section manual-section">
+      <h2 data-i18n="qsTitle">快速上手</h2>
+      <ul class="text-help">
+        <li data-i18n="qs1">
+          Xlog 提供兩種建立模式：<br>
+          ① <strong>連結模式</strong>（標題≤30、正文≤500、1–20 條連結：名稱+URL）<br>
+          ② <strong>文章模式（Markdown）</strong>（標題≤30、正文建議≤5000，支援上色工具）
+        </li>
+        <li data-i18n="qs2">選擇主題（明/暗）與界面語言，完成人機驗證後提交生成。</li>
+        <li data-i18n="qs3">系統會分配 <span class="text-code">https://XXXXXXXXXX.xlog.ink/</span> 專屬二級網域，可直接分享與使用。</li>
+      </ul>
+
+    </section>
+
+    <!-- 內容規範 -->
+    <section class="page-section manual-section">
+      <h2 data-i18n="policyTitle">內容規範與限制</h2>
+      <div class="list-item">
+        <h3 data-i18n="adultOkTitle">允許的成人內容</h3>
+        <p data-i18n="adultOk">僅限合法、<strong>自願</strong>、<strong>成年人（18+）</strong> 的成人/情色內容；遵守當地法律與平台規範，尊重隱私與肖像權，建議標示 NSFW。</p>
+      </div>
+      <div class="list-item">
+        <h3 data-i18n="banTitle">嚴禁內容</h3>
+        <ul class="text-help">
+          <li data-i18n="ban1">詐騙與非法行為（釣魚、詐財、勒索、販售/引導非法服務或工具）。</li>
+          <li data-i18n="ban2">毒品（宣傳、販售或教唆製作/使用非法藥物）。</li>
+          <li data-i18n="ban3">仇恨與煽動暴力（基於種族、民族、宗教、性別、性傾向等）。</li>
+          <li data-i18n="ban4">未成年人保護：任何涉未成年之性內容、性暗示、剝削或虐待；任何形式的兒少性犯罪內容或辯護。</li>
+          <li data-i18n="ban5">非自願內容：報復性色情、偷拍、強迫、胁迫、藥物控制、迷姦等。</li>
+          <li data-i18n="ban6">兒童虐待 / 自殘 / 極端暴力之展示或美化。</li>
+          <li data-i18n="ban7">未經明確同意之真實個體色情深偽（deepfake）。</li>
+          <li data-i18n="ban8">隱私侵害（人肉、公開敏感個資如醫療/財務資料）。</li>
+          <li data-i18n="ban9">惡意軟體/黑客（木馬、間諜軟體、惡意腳本或其散布）。</li>
+        </ul>
+        <p class="text-help" data-i18n="policyNote">Xlog 得以下線或封鎖違規頁面；使用者對其內容自行負責。</p>
+      </div>
+    </section>
+
+    <!-- 生成規則與配額 -->
+    <section class="page-section manual-section">
+      <h2 data-i18n="rulesTitle">生成規則與配額</h2>
+      <ul class="text-help">
+        <li data-i18n="r1">連結模式：標題 ≤30；正文 ≤500；1–20 條連結；名稱 ≤30，URL 需以 <span class="text-code">http/https</span> 開頭。</li>
+        <li data-i18n="r1b">文章模式：標題 ≤30；正文建議 ≤5000；支援 Markdown 與文字上色（預設 16 色）。</li>
+        <li data-i18n="r2">提交前需完成 Cloudflare Turnstile 人機驗證，以降低濫用與批量生成。</li>
+        <li data-i18n="r3">生成後頁面為<strong>靜態且不可修改/刪除</strong>；請在提交前確認內容。</li>
+        <li data-i18n="r4">頻率限制：<strong>1 分鐘 1 次</strong>、<strong>24 小時 50 次</strong>（預設基於 <span class="kbd">REMOTE_ADDR</span>；僅在受信代理配置後才讀取轉發 IP）。</li>
+      </ul>
+    </section>
+
+    <!-- 文章模式說明 -->
+    <section class="page-section manual-section">
+      <h2 data-i18n="mdTitle">文章模式（Markdown）</h2>
+      <ul class="text-help">
+        <li data-i18n="md1">使用 EasyMDE 編輯器，支援標題、粗體、斜體、清單、程式碼、表格、分隔線、引用等。</li>
+        <li data-i18n="md2">工具列包含預覽；已移除展開與全螢幕；新增<strong>吸管上色</strong>，點擊後出現 16 色預設色塊。</li>
+        <li data-i18n="md3">選中文字後點色塊，即會插入 <span class="text-code">&lt;span style="color:#RRGGBB"&gt;...&lt;/span&gt;</span> 包裹文字。</li>
+        <li data-i18n="md4">若未選中文字，將插入預設占位「彩色文字」。</li>
+      </ul>
+      <div class="manual-actions">
+        <a class="button button--accent" id="go-create-article-2" href="/creat-article.php" data-i18n="ctaGoArticle">前往文章模式</a>
+      </div>
+    </section>
+
+    <!-- 二級網域與訪問 -->
+    <section class="page-section manual-section">
+      <h2 data-i18n="domainTitle">二級網域與訪問</h2>
+      <ul class="text-help">
+        <li data-i18n="d1">每個頁面分配一個 10 位字母數字二級網域：<span class="text-code">https://XXXXXXXXXX.xlog.ink/</span>。</li>
+        <li data-i18n="d2">建議於履歷、社交個人檔案、作品集與宣傳頁中使用該連結。</li>
+        <li data-i18n="d3">頁面為靜態內容，CDN 加速，通常達到毫秒級響應。</li>
+      </ul>
+    </section>
+
+    <!-- 隱私與安全 -->
+    <section class="page-section manual-section">
+      <h2 data-i18n="privacyTitle">隱私與安全</h2>
+      <ul class="text-help">
+        <li data-i18n="p1">系統會對正文中的郵件地址做基礎處理以減少垃圾抓取。</li>
+        <li data-i18n="p2">請勿上傳或填寫個人敏感資料（身分證/銀行/醫療等）。</li>
+        <li data-i18n="p3">若發現疑似違規或侵權內容，請立刻透過頁腳聯繫管道舉報。</li>
+      </ul>
+    </section>
+
+    <!-- SEO 與品牌 -->
+    <section class="page-section manual-section">
+      <h2 data-i18n="seoBlockTitle">SEO 與品牌</h2>
+      <ul class="text-help">
+        <li data-i18n="s1">生成頁會設置 <span class="text-code">&lt;title&gt;</span> 與 <span class="text-code">description</span>；建議簡潔聚焦。</li>
+        <li data-i18n="s2">標題建議控制在 30 字內，利於行動端展示與社交分享卡片。</li>
+        <li data-i18n="s3">請勿誤導性關鍵字堆疊或濫用品牌詞。</li>
+      </ul>
+    </section>
+
+    <!-- FAQ -->
+    <section class="page-section manual-section faq-stack">
+      <h2 data-i18n="faqTitle">常見問題</h2>
+      <details class="ui-card ui-card--faq"><summary data-i18n="q1">生成後能否修改或刪除？</summary><p class="text-help" data-i18n="a1">無法修改或刪除。請在提交前確認內容；這可保證長期穩定可訪問。</p></details>
+      <details class="ui-card ui-card--faq"><summary data-i18n="q2">我可以生成多個頁面嗎？</summary><p class="text-help" data-i18n="a2">可以，但單一 IP 有頻率限制（1 分鐘 1 次、24 小時 50 次），且每次提交前都需完成人機驗證。</p></details>
+      <details class="ui-card ui-card--faq"><summary data-i18n="q3">文章模式的顏色工具為何不是色盤？</summary><p class="text-help" data-i18n="a3">為提升兼容性，我們提供 16 色預設色塊。點擊吸管後選擇色塊即可套用。</p></details>
+      <details class="ui-card ui-card--faq"><summary data-i18n="q4">Markdown 支援哪些格式？</summary><p class="text-help" data-i18n="a4">支援標題、粗體、斜體、清單、程式碼、表格、分隔線、引用等；可即時預覽。</p></details>
+      <details class="ui-card ui-card--faq"><summary data-i18n="q5">頁面會被搜尋引擎收錄嗎？</summary><p class="text-help" data-i18n="a5">會。請善用清晰的標題與文字，避免關鍵字堆砌。</p></details>
+    </section>
+
+    <section class="page-section manual-section is-centered">
+        <a class="button" id="go-home" href="/" data-i18n="ctaHome">返回首頁</a>
+    </section>
+    </div>
+    </main>
+
+    <div id="footer-slot" class="footer-slot"></div>
+  </div>
+
+  <div class="fab"></div>
+
+  <script src="/assets/js/i18n.js"></script>
+  <script src="/assets/js/app.js"></script>
+  <script>
+  (function () {
+    XLOG.initState();
+    XLOG.applyLang(XLOG.curLang);
+    XLOG.applySEO('seoTitle_manual', 'seoDesc_manual');
+    XLOG.bindControls({
+      onLangChange: function () {
+        XLOG.applySEO('seoTitle_manual', 'seoDesc_manual');
+        XLOG.rewriteParamLinks('#go-home, #go-create-article-2, a[href="/"], a[href="/creat.php"], a[href="/creat-article.php"]');
+      },
+      onThemeChange: function () {
+        XLOG.rewriteParamLinks('#go-home, #go-create-article-2, a[href="/"], a[href="/creat.php"], a[href="/creat-article.php"]');
+      }
+    });
+    XLOG.loadFooter();
+    XLOG.rewriteParamLinks('#go-home, #go-create-article-2, a[href="/"], a[href="/creat.php"], a[href="/creat-article.php"]');
+  })();
+  </script>
+</body>
+</html>
