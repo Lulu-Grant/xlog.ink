@@ -46,6 +46,10 @@ Optional:
 
 `XLOG_TRUSTED_PROXIES` should be a comma-separated list of reverse proxy IPs. Only requests coming from those IPs are allowed to supply forwarded client IP headers.
 
+See also:
+
+- `.env.example`
+
 ## Directory Layout
 
 Typical deployment layout:

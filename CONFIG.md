@@ -96,6 +96,8 @@ Set them through:
 - PHP-FPM pool environment settings
 - deployment platform secret management
 
+Use `.env.example` only as a template. Do not commit real secret values.
+
 ## Writable Paths
 
 The application expects write access to:

@@ -107,6 +107,7 @@ build_recent.py recent.html 相关构建脚本
 
 - [DEPLOY.md](DEPLOY.md)
 - [CONFIG.md](CONFIG.md)
+- [.env.example](.env.example)
 
 ## 仓库状态
 
