@@ -19,13 +19,14 @@ These paths are part of the application source and should normally stay in Git:
 - `generate.php` — link-page generation endpoint
 - `generate-article.php` — article-page generation endpoint
 - `build_recent.py` — script that rebuilds `recent.html`
+- `site-samples/` — committed showcase HTML pages
 - `README.md`, `DEPLOY.md`, `CONFIG.md` — project documentation
 
 ### Runtime data
 
 These paths are written or updated by the running application:
 
-- `site/` — generated public HTML pages
+- `site/` — runtime-generated public HTML pages
 - `data/pages.jsonl` — append-only page index used to build `recent.html`
 - `data/ratelimit/` — per-IP rate-limit state files
 
@@ -39,7 +40,7 @@ Keep these in Git:
 
 - application source files
 - public assets needed to build or serve the site
-- curated sample pages in `site/` if you intentionally use them as showcase fixtures
+- curated sample pages in `site-samples/`
 - documentation
 
 ### Keep out of Git
@@ -75,12 +76,9 @@ These are meant to be reviewed, versioned, and deployed as code.
 2. Runtime-generated files
 These are created or mutated by production traffic and may differ across environments.
 
-`site/` sits in a mixed zone:
+`site/` is now intended for runtime-generated output only.
 
-- sample pages committed to Git can be useful as demos or regression fixtures
-- production-generated pages under the same path are runtime data
-
-If you want a stricter production layout, consider separating committed sample pages from live generated output in the future.
+Committed showcase pages belong in `site-samples/`.
 
 ## Secret Handling
 
@@ -121,12 +119,8 @@ You usually do not need to preserve:
 - temporary files
 - local machine folders ignored by Git
 
-## Recommended Future Cleanup
-
-If the project grows, consider this separation:
+## Current Separation
 
 - `site-samples/` for committed showcase pages
-- `site/` for production-generated pages only
-- `storage/` or `var/` for runtime files such as rate limits and indexes
-
-That split would make deployment, backups, and Git boundaries much clearer.
+- `site/` for runtime-generated pages only
+- `data/` for indexes and rate-limit state

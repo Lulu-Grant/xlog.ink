@@ -37,7 +37,8 @@ GitHub 仓库本身不承担生产运行环境职责；正式可用服务以 `ht
 assets/         样式、脚本、图片与第三方前端资源
 includes/       PHP 公共函数、响应、i18n、限流等模块
 partials/       可复用 HTML 片段
-site/           已生成的示例页面
+site/           运行时生成页面输出目录
+site-samples/   仓库内保留的案例页面
 index.html      首页
 recent.html     最近生成页面展示
 manual.html     使用说明页
@@ -64,7 +65,7 @@ build_recent.py recent.html 相关构建脚本
 
 ### 4. 示例页面保留
 
-仓库保留部分已生成页面作为样本，方便开发、回归检查与风格迭代。
+仓库保留的案例页面已独立放入 `site-samples/`，而 `site/` 专门留给运行时生成内容，方便部署、备份和版本管理。
 
 ## 运行方式
 

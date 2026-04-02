@@ -10,6 +10,7 @@ This project is a PHP-based site generator:
 - `creat.php` and `creat-article.php` render the creation UI
 - `generate.php` and `generate-article.php` handle form submission and write generated HTML files
 - runtime data is stored on disk under `site/` and `data/`
+- committed showcase fixtures live under `site-samples/`
 
 Recommended stack:
 
@@ -61,6 +62,7 @@ Typical deployment layout:
   includes/
   partials/
   site/
+  site-samples/
   index.html
   recent.html
   manual.html
@@ -83,6 +85,7 @@ The PHP runtime user only needs read access to:
 - `assets/`
 - `includes/`
 - `partials/`
+- `site-samples/`
 - root HTML and PHP entry files
 
 ## Deployment Steps

@@ -75,6 +75,9 @@ assert_body_contains "/creat-article.php" "EasyMDE"
 assert_status "/recent.html" "200"
 assert_body_contains "/recent.html" "XLOG"
 
+assert_status "/site-samples/m4lite7b2q.html" "200"
+assert_body_contains "/site-samples/m4lite7b2q.html" "XLOG"
+
 assert_status "/generate.php" "405"
 assert_body_contains "/generate.php" "Method Not Allowed"
 

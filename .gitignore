@@ -9,6 +9,8 @@ img/
 
 data/ratelimit/
 site/.build.log
+site/*.html
+!site/.gitkeep
 
 *.log
 *.tmp
