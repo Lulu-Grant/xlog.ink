@@ -70,6 +70,20 @@ build_recent.py recent.html 相关构建脚本
 - 正式服务器：负责运行 PHP 动态逻辑
 - 正式域名：`https://xlog.ink`
 
+## 测试
+
+仓库已提供一套轻量的零依赖测试，覆盖：
+
+- PHP helper 与 Markdown 核心逻辑
+- Turnstile 在未配置 secret 时的失败路径
+- `build_recent.py` 的索引读取与输出排序
+
+运行方式：
+
+```bash
+bash tests/run-tests.sh
+```
+
 ## 推荐部署方式
 
 推荐使用：

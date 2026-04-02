@@ -19,14 +19,14 @@ MAX_ITEMS = 100
 
 # ── 数据加载 ──────────────────────────────────────────────
 
-def load_from_index():
+def load_from_index(index_file=INDEX_FILE):
     """从 pages.jsonl 索引加载（追加写入，需去重取最新）"""
-    if not INDEX_FILE.is_file():
+    if not index_file.is_file():
         return None
 
     items = []
     seen = set()
-    for line in INDEX_FILE.read_text(encoding="utf-8").strip().splitlines():
+    for line in index_file.read_text(encoding="utf-8").strip().splitlines():
         line = line.strip()
         if not line:
             continue
@@ -57,10 +57,10 @@ TIME_RE = re.compile(
 )
 
 
-def load_from_scan():
+def load_from_scan(site_dir=SITE_DIR):
     """回退：扫描 /site/ 目录（兼容旧数据）"""
     items = []
-    for html_file in sorted(SITE_DIR.glob("*.html")):
+    for html_file in sorted(site_dir.glob("*.html")):
         try:
             text = html_file.read_text(encoding="utf-8", errors="ignore")
 
@@ -95,35 +95,17 @@ def load_from_scan():
     return items
 
 
-# ── 加载数据 ──────────────────────────────────────────────
+def render_recent_html(recent_list):
+    list_html = "\n".join(
+        f'<li>'
+        f'  <a href="{escape(it["url"], quote=True)}" target="_blank" rel="noopener">{escape(it["title"])}</a>'
+        f'  <span class="text-code" title="{escape(it["time"], quote=True)}">{escape(it["time"][:10])}</span>'
+        f'</li>'
+        for it in recent_list
+    )
 
-print("[INFO] 尝试从索引加载...")
-items = load_from_index()
-
-if items is None:
-    print("[INFO] 索引不存在或为空，回退到扫描 /site/ ...")
-    items = load_from_scan()
-else:
-    print(f"[INFO] 从索引加载了 {len(items)} 条记录")
-
-# 按时间倒序
-items.sort(key=lambda x: x["time"], reverse=True)
-recent_list = items[:MAX_ITEMS]
-
-print(f"[INFO] 输出 {len(recent_list)} 条到 {OUTPUT_FILE}")
-
-# ── 生成 HTML ─────────────────────────────────────────────
-
-list_html = "\n".join(
-    f'<li>'
-    f'  <a href="{escape(it["url"], quote=True)}" target="_blank" rel="noopener">{escape(it["title"])}</a>'
-    f'  <span class="text-code" title="{escape(it["time"], quote=True)}">{escape(it["time"][:10])}</span>'
-    f'</li>'
-    for it in recent_list
-)
-
-# 注意：f-string 中的花括号需要 {{ }} 转义
-HTML_TEMPLATE = f"""<!DOCTYPE html>
+    # 注意：f-string 中的花括号需要 {{ }} 转义
+    return f"""<!DOCTYPE html>
 <html lang="zh-TW">
 <head>
 <meta charset="utf-8">
@@ -208,5 +190,28 @@ HTML_TEMPLATE = f"""<!DOCTYPE html>
 </body>
 </html>"""
 
-OUTPUT_FILE.write_text(HTML_TEMPLATE, encoding="utf-8")
-print("[OK] recent.html 已生成")
+
+def build_recent(index_file=INDEX_FILE, site_dir=SITE_DIR, output_file=OUTPUT_FILE, max_items=MAX_ITEMS):
+    print("[INFO] 尝试从索引加载...")
+    items = load_from_index(index_file)
+
+    if items is None:
+        print("[INFO] 索引不存在或为空，回退到扫描 /site/ ...")
+        items = load_from_scan(site_dir)
+    else:
+        print(f"[INFO] 从索引加载了 {len(items)} 条记录")
+
+    items.sort(key=lambda x: x["time"], reverse=True)
+    recent_list = items[:max_items]
+
+    print(f"[INFO] 输出 {len(recent_list)} 条到 {output_file}")
+    output_file.write_text(render_recent_html(recent_list), encoding="utf-8")
+    print("[OK] recent.html 已生成")
+
+
+def main():
+    build_recent()
+
+
+if __name__ == "__main__":
+    main()
