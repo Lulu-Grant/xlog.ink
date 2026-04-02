@@ -121,8 +121,6 @@ function markdown_to_html($markdown) {
 }
 
 function markdown_inline($text) {
-    $text = h($text);
-
     $codeMap = [];
     $text = preg_replace_callback('/`([^`]+)`/', function ($m) use (&$codeMap) {
         $key = '__CODE_' . count($codeMap) . '__';
@@ -130,9 +128,23 @@ function markdown_inline($text) {
         return $key;
     }, $text);
 
+    $colorMap = [];
+    $text = preg_replace_callback('/<span\s+style="color:\s*(#[0-9A-Fa-f]{6})"\s*>(.*?)<\/span>/su', function ($m) use (&$colorMap) {
+        $key = '__COLOR_' . count($colorMap) . '__';
+        $color = strtolower($m[1]);
+        $inner = markdown_inline($m[2]);
+        $colorMap[$key] = '<span style="color:' . h($color) . '">' . $inner . '</span>';
+        return $key;
+    }, $text);
+
+    $text = h($text);
     $text = preg_replace('~\[(.+?)\]\((https?://[^\s)]+)\)~', '<a href="$2" target="_blank" rel="nofollow noopener">$1</a>', $text);
     $text = preg_replace('/\*\*(.+?)\*\*/s', '<strong>$1</strong>', $text);
     $text = preg_replace('/\*(.+?)\*/s', '<em>$1</em>', $text);
+
+    if ($colorMap) {
+        $text = strtr($text, $colorMap);
+    }
 
     if ($codeMap) {
         $text = strtr($text, $codeMap);

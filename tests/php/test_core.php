@@ -39,5 +39,7 @@ assert_true(str_contains($markdownHtml, '<a href="https://example.com" target="_
 assert_true(str_contains($markdownHtml, '<ul><li>One</li><li>Two</li></ul>'), 'markdown_to_html should render unordered lists');
 assert_true(str_contains($markdownHtml, '<blockquote><p>Quote</p></blockquote>'), 'markdown_to_html should render blockquotes');
 assert_true(str_contains(markdown_to_html('<script>alert(1)</script>'), '&lt;script&gt;alert(1)&lt;/script&gt;'), 'markdown_to_html should escape raw HTML');
+assert_true(str_contains(markdown_to_html('<span style="color:#E53935">Color text</span>'), '<span style="color:#e53935">Color text</span>'), 'markdown_to_html should allow sanitized color spans');
+assert_true(str_contains(markdown_to_html('<span style="font-size:99px">Unsafe</span>'), '&lt;span style=&quot;font-size:99px&quot;&gt;Unsafe&lt;/span&gt;'), 'markdown_to_html should still escape unsupported raw HTML');
 
 fwrite(STDOUT, "PHP tests passed\n");
