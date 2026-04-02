@@ -131,6 +131,7 @@ CI 配置：
 
 - [DEPLOY.md](DEPLOY.md)
 - [CONFIG.md](CONFIG.md)
+- [BRAND.md](BRAND.md)
 - [.env.example](.env.example)
 
 ## 仓库状态
