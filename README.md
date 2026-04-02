@@ -1,6 +1,9 @@
 # xlog.ink
 
 [![Tests](https://github.com/Lulu-Grant/xlog.ink/actions/workflows/tests.yml/badge.svg)](https://github.com/Lulu-Grant/xlog.ink/actions/workflows/tests.yml)
+![PHP](https://img.shields.io/badge/PHP-8.1%2B-777bb4)
+![Python](https://img.shields.io/badge/Python-3.x-3776ab)
+![Tests](https://img.shields.io/badge/Tests-Zero--dependency-2ea44f)
 
 xlog.ink 是一个面向个人主页、作品页、文章页与公开资料页的轻量发布项目，当前正在实际使用：
 
