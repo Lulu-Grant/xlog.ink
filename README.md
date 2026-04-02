@@ -78,12 +78,17 @@ build_recent.py recent.html 相关构建脚本
 - Turnstile 在未配置 secret 时的失败路径
 - `build_recent.py` 的索引读取与输出排序
 - PHP 内置服务器下的关键 HTTP smoke test
+- GitHub Actions 中的自动测试执行
 
 运行方式：
 
 ```bash
 bash tests/run-tests.sh
 ```
+
+CI 配置：
+
+- `.github/workflows/tests.yml`
 
 ## 推荐部署方式
 
