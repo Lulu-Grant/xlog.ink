@@ -38,13 +38,6 @@ $createPageCsp = h(build_csp('create-page'));
   <link rel="manifest" href="/site.webmanifest">
   <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
 
-  <style>
-    [data-i18n]:empty::after { content: attr(data-i18n); opacity: 0; }
-    html, body { overflow-x: hidden; }
-    .ui-card h2 { display: flex; align-items: baseline; gap: 8px; }
-    input, textarea { -webkit-tap-highlight-color: transparent; }
-  </style>
-
   <script type="application/ld+json">
   {
     "@context":"https://schema.org",
@@ -101,76 +94,79 @@ $createPageCsp = h(build_csp('create-page'));
   </section>
 
   <!-- 模式切换 -->
-  <div class="page-section ui-card ui-card--switcher page-section--tight-top">
-    <div class="mode-tabs" role="tablist" aria-label="Create mode">
-      <a id="tab-links" role="tab" class="button button--ghost" data-i18n="tabLinks">連結模式</a>
-      <a id="tab-article" role="tab" class="button button--ghost" data-i18n="tabArticle">文章模式（Markdown）</a>
-    </div>
-  </div>
-
   <noscript>
     <div class="page-section ui-card ui-card--warning">
       ⚠️ 需要開啟 JavaScript 才能正常使用。
     </div>
   </noscript>
 
-  <!-- 表单 -->
-  <form id="form" class="page-section ui-card editor-frame form-stack" action="/generate.php" method="post" novalidate>
-    <input type="hidden" name="theme" id="hidden_theme" value="dark">
-    <input type="hidden" name="ui_lang" id="hidden_ui_lang" value="zh-TW">
-
-    <div class="text-help form-intro-note" data-i18n="tipLimits">標題≤30字；正文≤500字；最多 20 條連結；URL 需以 http/https 開頭。</div>
-
-    <div class="form-block">
-      <h2 data-i18n="title">標題（必填，≤30字）</h2>
-      <input id="title" name="title" type="text" maxlength="30" required aria-required="true"
-             aria-describedby="titleHelp" placeholder="">
-      <div id="titleHelp" class="text-help" data-i18n="titleHelp">請輸入頁面標題，不超過 30 個字元。</div>
-    </div>
-
-    <div class="form-block">
-      <h2 data-i18n="body">文字模塊（≤500字，可留空）</h2>
-      <textarea id="body" name="body" rows="6" maxlength="500" placeholder=""
-                aria-describedby="bodyHelp"></textarea>
-      <div id="bodyHelp" class="text-help" data-i18n="bodyHelp">可補充個人介紹、活動說明或頁面摘要。</div>
-    </div>
-
-    <div class="form-block">
-      <h2 data-i18n="links">連結模塊（1–20 條）</h2>
-      <div id="links" class="form-row" aria-live="polite"></div>
-      <div class="action-group">
-        <button type="button" id="add-link" class="button button--ghost" data-i18n="addLink">新增連結</button>
-      </div>
-    </div>
-
-    <div class="form-block adult-check">
-      <label class="adult-check-label" for="is_adult">
-        <input id="is_adult" name="is_adult" type="checkbox" value="1">
-        <span>
-          <strong data-i18n="adultContentLabel">此頁面包含 18+ 成人內容</strong>
-          <small class="text-help" data-i18n="adultContentHelp">勾選後，訪客首次打開該頁面時會先看到 18+ 確認提示。</small>
-        </span>
-      </label>
-    </div>
-
-    <div class="form-actions-shell">
-      <div class="form-block">
-      <h2 data-i18n="verificationTitle">安全驗證</h2>
-      <div class="text-help" data-i18n="verificationHelp">提交前請完成人機驗證，避免濫用與批量生成。</div>
-      <div class="turnstile-wrap">
-        <div class="cf-turnstile"
-             data-sitekey="<?php echo $turnstileSiteKey; ?>"
-             data-theme="auto"
-             data-language="auto"></div>
-      </div>
+  <section class="page-section create-shell">
+    <div class="page-main-wide">
+      <div class="create-modebar">
+        <div class="mode-tabs" role="tablist" aria-label="Create mode">
+          <a id="tab-links" role="tab" class="button button--ghost" data-i18n="tabLinks">連結模式</a>
+          <a id="tab-article" role="tab" class="button button--ghost" data-i18n="tabArticle">文章模式（Markdown）</a>
+        </div>
       </div>
 
-      <div class="action-group">
-        <button class="button button--accent" type="submit" data-i18n="generate">免費生成個人主頁</button>
-      </div>
-    </div>
+      <form id="form" class="editor-frame form-stack create-panel" action="/generate.php" method="post" novalidate>
+        <input type="hidden" name="theme" id="hidden_theme" value="dark">
+        <input type="hidden" name="ui_lang" id="hidden_ui_lang" value="zh-TW">
 
-  </form>
+        <div class="text-help form-intro-note" data-i18n="tipLimits">標題≤30字；正文≤500字；最多 20 條連結；URL 需以 http/https 開頭。</div>
+
+        <div class="form-block">
+          <h2 data-i18n="title">標題（必填，≤30字）</h2>
+          <input id="title" name="title" type="text" maxlength="30" required aria-required="true"
+                 aria-describedby="titleHelp" placeholder="">
+          <div id="titleHelp" class="text-help" data-i18n="titleHelp">請輸入頁面標題，不超過 30 個字元。</div>
+        </div>
+
+        <div class="form-block">
+          <h2 data-i18n="body">文字模塊（≤500字，可留空）</h2>
+          <textarea id="body" name="body" rows="6" maxlength="500" placeholder=""
+                    aria-describedby="bodyHelp"></textarea>
+          <div id="bodyHelp" class="text-help" data-i18n="bodyHelp">可補充個人介紹、活動說明或頁面摘要。</div>
+        </div>
+
+        <div class="form-block">
+          <div class="form-block__header">
+            <h2 data-i18n="links">連結模塊（1–20 條）</h2>
+            <button type="button" id="add-link" class="button button--ghost button--compact" data-i18n="addLink">新增連結</button>
+          </div>
+          <div id="links" class="form-row" aria-live="polite"></div>
+        </div>
+
+        <div class="form-block adult-check">
+          <label class="adult-check-label" for="is_adult">
+            <input id="is_adult" name="is_adult" type="checkbox" value="1">
+            <span>
+              <strong data-i18n="adultContentLabel">此頁面包含 18+ 成人內容</strong>
+              <small class="text-help" data-i18n="adultContentHelp">勾選後，訪客首次打開該頁面時會先看到 18+ 確認提示。</small>
+            </span>
+          </label>
+        </div>
+
+        <div class="form-actions-shell">
+          <div class="form-block form-block--verification">
+            <h2 data-i18n="verificationTitle">安全驗證</h2>
+            <div class="text-help" data-i18n="verificationHelp">提交前請完成人機驗證，避免濫用與批量生成。</div>
+            <div class="turnstile-wrap">
+              <div class="cf-turnstile"
+                   data-sitekey="<?php echo $turnstileSiteKey; ?>"
+                   data-theme="auto"
+                   data-language="auto"></div>
+            </div>
+          </div>
+
+          <div class="action-group action-group--submit">
+            <button class="button button--accent" type="submit" data-i18n="generate">免費生成個人主頁</button>
+            <a class="button button--ghost js-manual" href="/manual.html" data-i18n="manualBtn">使用手冊</a>
+          </div>
+        </div>
+      </form>
+    </div>
+  </section>
   </main>
   <div id="footer-slot" class="footer-slot"></div>
 </div>

@@ -39,73 +39,6 @@ $createPageCsp = h(build_csp('create-page'));
   <link rel="stylesheet" href="/assets/vendor/easymde/easymde.min.css">
   <script src="/assets/vendor/easymde/easymde.min.js"></script>
 
-  <style>
-  /* 暗色 EasyMDE */
-  body.theme-dark .editor-toolbar,
-  body.theme-dark .EasyMDEContainer .editor-toolbar {
-    background-color: #1a1b1f !important; border-color: #2e2f35 !important;
-  }
-  body.theme-dark .editor-toolbar button,
-  body.theme-dark .editor-toolbar i.fa {
-    filter: brightness(2) contrast(1.2) saturate(1.2) !important; color: #ddd !important;
-  }
-  body.theme-dark .editor-toolbar button:hover,
-  body.theme-dark .editor-toolbar button.active { background-color: #2a2b2f !important; }
-  body.theme-dark .CodeMirror,
-  body.theme-dark .CodeMirror-scroll { background:#0f1115 !important; color:#e5e7eb !important; }
-  body.theme-dark .cm-header { color:#cfd2da !important; }
-  body.theme-dark .cm-strong { color:#fff !important; }
-  body.theme-dark .cm-em { color:#d1d5db !important; }
-  body.theme-dark .cm-link { color:#9bb7ff !important; }
-  body.theme-dark .cm-comment, body.theme-dark .cm-quote { color:#8b949e !important; }
-  body.theme-dark .cm-code { color:#a6e3a1 !important; }
-  body.theme-dark .cm-hr { border-color:#333 !important; }
-
-  /* 色塊面板 */
-  .color-panel {
-    position:absolute; top:0; left:0; display:none;
-    background: var(--card); border:1px solid var(--border);
-    border-radius: 10px; padding:10px;
-    box-shadow: 0 10px 24px rgba(0,0,0,.35); z-index: 9999;
-  }
-  .color-grid { display:grid; grid-template-columns: repeat(4, 28px); gap:8px; }
-  .color-swatch {
-    width:28px; height:28px; border-radius:6px; cursor:pointer;
-    border:1px solid rgba(255,255,255,.12);
-  }
-  .color-swatch:hover { transform: scale(1.08); transition: .08s; }
-  .color-panel .cap { font-size:12px; color: var(--muted); margin-bottom:8px; text-align:center; }
-
-  /* EasyMDE toolbar fallback icons, so the editor does not depend on icon fonts */
-  .editor-toolbar i.fa {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    min-width: 1.1em;
-    font-style: normal;
-    font-family: inherit !important;
-    font-size: 13px;
-    line-height: 1;
-  }
-  .editor-toolbar i.fa::before {
-    font-family: inherit !important;
-    font-weight: 700;
-  }
-  .editor-toolbar .fa-bold::before { content: "B"; }
-  .editor-toolbar .fa-italic::before { content: "I"; font-style: italic; }
-  .editor-toolbar .fa-strikethrough::before { content: "S"; text-decoration: line-through; }
-  .editor-toolbar .fa-header::before { content: "H"; }
-  .editor-toolbar .fa-quote-left::before { content: "\""; }
-  .editor-toolbar .fa-list-ul::before { content: "UL"; font-size: 10px; }
-  .editor-toolbar .fa-list-ol::before { content: "OL"; font-size: 10px; }
-  .editor-toolbar .fa-link::before { content: "Link"; font-size: 9px; }
-  .editor-toolbar .fa-code::before { content: "</>"; font-size: 10px; }
-  .editor-toolbar .fa-table::before { content: "Tbl"; font-size: 9px; }
-  .editor-toolbar .fa-minus::before { content: "-"; }
-  .editor-toolbar .fa-eyedropper::before { content: "A"; }
-  .editor-toolbar .fa-eye::before { content: "View"; font-size: 9px; }
-  .editor-toolbar .fa-question-circle::before { content: "?"; }
-  </style>
 </head>
 <body class="theme-dark page-create mode-article">
 <div class="container">
@@ -140,62 +73,64 @@ $createPageCsp = h(build_csp('create-page'));
     </div>
   </section>
 
-  <!-- 模式切换 -->
-  <div class="page-section ui-card ui-card--switcher">
-    <div class="mode-tabs" role="tablist" aria-label="Create mode">
-      <a id="tab-links" class="button button--ghost" data-i18n="tabLinks" role="tab" aria-selected="false">連結模式</a>
-      <a id="tab-article" class="button button--accent" data-i18n="tabArticle" role="tab" aria-selected="true">文章模式（Markdown）</a>
-    </div>
-  </div>
-
-  <form class="page-section ui-card editor-frame form-stack" action="/generate-article.php" method="post" novalidate>
-    <input type="hidden" name="theme" id="hidden_theme" value="dark">
-    <input type="hidden" name="ui_lang" id="hidden_ui_lang" value="zh-TW">
-
-    <div class="text-help form-intro-note" data-i18n="tipLimits_article">標題≤30字；正文建議≤5000字；提交後不可修改或刪除。</div>
-
-    <div class="form-block">
-      <h2 data-i18n="titleLabel">標題（必填，≤30字）</h2>
-      <input id="title" name="title" type="text" maxlength="30" required aria-required="true"
-             aria-describedby="titleHelp" placeholder="">
-      <div id="titleHelp" class="text-help" data-i18n="titleHelp">請輸入頁面標題，不超過 30 個字元。</div>
-    </div>
-
-    <div class="form-block">
-      <h2 data-i18n="mdLabel">正文（支援 Markdown）</h2>
-      <textarea id="markdown_body" name="markdown_body" rows="14" aria-describedby="mdHelp"></textarea>
-      <div id="mdHelp" class="text-help" data-i18n="mdHelp">支援標題/粗斜體/連結/列表/程式碼/引用/分隔線等格式，右上角可切換預覽。</div>
-    </div>
-
-    <div class="form-block adult-check">
-      <label class="adult-check-label" for="is_adult">
-        <input id="is_adult" name="is_adult" type="checkbox" value="1">
-        <span>
-          <strong data-i18n="adultContentLabel">此頁面包含 18+ 成人內容</strong>
-          <small class="text-help" data-i18n="adultContentHelp">勾選後，訪客首次打開該頁面時會先看到 18+ 確認提示。</small>
-        </span>
-      </label>
-    </div>
-
-    <div class="form-actions-shell">
-      <div class="form-block">
-      <h2 data-i18n="verificationTitle">安全驗證</h2>
-      <div class="text-help" data-i18n="verificationHelp">提交前請完成人機驗證，避免濫用與批量生成。</div>
-      <div class="turnstile-wrap">
-        <div class="cf-turnstile"
-             data-sitekey="<?php echo $turnstileSiteKey; ?>"
-             data-theme="auto"
-             data-language="auto"></div>
-      </div>
+  <section class="page-section create-shell">
+    <div class="page-main-wide">
+      <div class="create-modebar">
+        <div class="mode-tabs" role="tablist" aria-label="Create mode">
+          <a id="tab-links" class="button button--ghost" data-i18n="tabLinks" role="tab" aria-selected="false">連結模式</a>
+          <a id="tab-article" class="button button--accent" data-i18n="tabArticle" role="tab" aria-selected="true">文章模式（Markdown）</a>
+        </div>
       </div>
 
-      <div class="action-group">
-        <button class="button button--accent" type="submit" data-i18n="generateBtn">生成文章頁面</button>
-        <a class="button" id="btn-manual" href="/manual.html" target="_blank" data-i18n="manual">使用手冊</a>
-      </div>
-    </div>
+      <form class="editor-frame form-stack create-panel create-panel--article" action="/generate-article.php" method="post" novalidate>
+        <input type="hidden" name="theme" id="hidden_theme" value="dark">
+        <input type="hidden" name="ui_lang" id="hidden_ui_lang" value="zh-TW">
 
-  </form>
+        <div class="text-help form-intro-note" data-i18n="tipLimits_article">標題≤30字；正文建議≤5000字；提交後不可修改或刪除。</div>
+
+        <div class="form-block">
+          <h2 data-i18n="titleLabel">標題（必填，≤30字）</h2>
+          <input id="title" name="title" type="text" maxlength="30" required aria-required="true"
+                 aria-describedby="titleHelp" placeholder="">
+          <div id="titleHelp" class="text-help" data-i18n="titleHelp">請輸入頁面標題，不超過 30 個字元。</div>
+        </div>
+
+        <div class="form-block">
+          <h2 data-i18n="mdLabel">正文（支援 Markdown）</h2>
+          <textarea id="markdown_body" name="markdown_body" rows="14" aria-describedby="mdHelp"></textarea>
+          <div id="mdHelp" class="text-help" data-i18n="mdHelp">支援標題/粗斜體/連結/列表/程式碼/引用/分隔線等格式，右上角可切換預覽。</div>
+        </div>
+
+        <div class="form-block adult-check">
+          <label class="adult-check-label" for="is_adult">
+            <input id="is_adult" name="is_adult" type="checkbox" value="1">
+            <span>
+              <strong data-i18n="adultContentLabel">此頁面包含 18+ 成人內容</strong>
+              <small class="text-help" data-i18n="adultContentHelp">勾選後，訪客首次打開該頁面時會先看到 18+ 確認提示。</small>
+            </span>
+          </label>
+        </div>
+
+        <div class="form-actions-shell">
+          <div class="form-block form-block--verification">
+            <h2 data-i18n="verificationTitle">安全驗證</h2>
+            <div class="text-help" data-i18n="verificationHelp">提交前請完成人機驗證，避免濫用與批量生成。</div>
+            <div class="turnstile-wrap">
+              <div class="cf-turnstile"
+                   data-sitekey="<?php echo $turnstileSiteKey; ?>"
+                   data-theme="auto"
+                   data-language="auto"></div>
+            </div>
+          </div>
+
+          <div class="action-group action-group--submit">
+            <button class="button button--accent" type="submit" data-i18n="generateBtn">生成文章頁面</button>
+            <a class="button button--ghost js-manual" id="btn-manual" href="/manual.html" target="_blank" data-i18n="manual">使用手冊</a>
+          </div>
+        </div>
+      </form>
+    </div>
+  </section>
   </main>
   <div id="footer-slot" class="footer-slot"></div>
 </div>
