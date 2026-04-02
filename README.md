@@ -1,9 +1,12 @@
 # xlog.ink
 
+[![Tests](https://github.com/Lulu-Grant/xlog.ink/actions/workflows/tests.yml/badge.svg)](https://github.com/Lulu-Grant/xlog.ink/actions/workflows/tests.yml)
+
 xlog.ink 是一个面向个人主页、作品页、文章页与公开资料页的轻量发布项目，当前正在实际使用：
 
 - Live Site: https://xlog.ink
 - GitHub Repo: https://github.com/Lulu-Grant/xlog.ink
+- CI: GitHub Actions 自动运行基础测试
 
 它提供：
 
