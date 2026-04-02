@@ -2,6 +2,9 @@
 
 xlog.ink 是一个面向个人主页、作品页、文章页与公开资料页的轻量发布项目。它提供多语言界面、移动端优先样式、示例展示页，以及基于 PHP 的页面生成入口。
 
+- 正在使用的项目地址：https://xlog.ink
+- GitHub 仓库地址：https://github.com/Lulu-Grant/xlog.ink
+
 ## 项目定位
 
 这个仓库保存的是 xlog.ink 当前版本的代码与静态资源，适合用于：
@@ -87,6 +90,7 @@ build_recent.py
 
 ## 仓库信息
 
+- Live Site: https://xlog.ink
 - GitHub Repo: https://github.com/Lulu-Grant/xlog.ink
 - Visibility: Public
 
