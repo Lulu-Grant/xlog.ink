@@ -12,3 +12,5 @@ site/.build.log
 
 *.log
 *.tmp
+__pycache__/
+*.pyc
