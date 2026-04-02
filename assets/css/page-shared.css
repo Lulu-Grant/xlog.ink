@@ -190,7 +190,7 @@
     font-size: 18px;
   }
   .logo-link {
-    gap: 0;
+    gap: 8px;
   }
   .page-header__controls { gap: 6px; }
   .page-header__controls label:has(#theme) select {

@@ -110,7 +110,7 @@ $createPageCsp = h(build_csp('create-page'));
 <body class="theme-dark page-create mode-article">
 <div class="container">
   <header class="page-header" aria-label="Site header">
-    <div class="page-header__title"><a href="/" class="logo-link">XLOG</a></div>
+    <div class="page-header__title"><a href="/" class="logo-link"><img src="/assets/brand/xlog-mark.svg" alt="" class="logo-mark" aria-hidden="true"><span class="logo-wordmark">XLOG</span></a></div>
     <div class="page-header__controls">
       <label><span data-i18n="themeLabel">主題</span>
         <select id="theme">

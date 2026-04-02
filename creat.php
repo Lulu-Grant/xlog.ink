@@ -65,7 +65,8 @@ $createPageCsp = h(build_csp('create-page'));
   <header class="page-header" aria-label="Site header">
     <div class="page-header__title">
       <a href="https://xlog.ink" class="logo-link" aria-label="返回首頁">
-        <span data-i18n="appTitle">XLOG</span>
+        <img src="/assets/brand/xlog-mark.svg" alt="" class="logo-mark" aria-hidden="true">
+        <span class="logo-wordmark" data-i18n="appTitle">XLOG</span>
       </a>
     </div>
     <div class="page-header__controls" role="group" aria-label="偏好設置">
