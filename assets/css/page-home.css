@@ -58,9 +58,9 @@
   max-width: 13.8ch;
   margin: 0 auto 14px;
   font-size: clamp(42px, 7.6vw, 72px);
-  line-height: .96;
+  line-height: 1.2;
   letter-spacing: -.05em;
-  text-wrap: balance;
+  /* text-wrap: balance; */
 }
 
 .page-hero__lede {
