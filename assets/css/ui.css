@@ -433,15 +433,11 @@ input:focus, textarea:focus, select:focus {
 }
 
 .list-item {
-  margin-top: 14px;
   padding: 14px 16px;
   border: 1px solid color-mix(in srgb, var(--border), transparent 12%);
   border-radius: var(--radius-md);
   background: color-mix(in srgb, var(--card), var(--bg) 10%);
   box-shadow: none;
-}
-.list-item:first-of-type {
-  margin-top: 0;
 }
 .list-item h3 {
   margin: 0 0 8px;
