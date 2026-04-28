@@ -1,0 +1,8 @@
+'{{tool_key}}' => [
+    'slug' => '{{tool-slug}}',
+    'legacy_slugs' => [],
+    'icon' => '{{emoji}}',
+    'title_key' => '{{tool_key}}',
+    'description_key' => '{{tool-slug}}_description',
+    'keywords_key' => '{{tool-slug}}_keywords',
+],
