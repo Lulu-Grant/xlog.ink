@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>测试</title>
+  <meta name="description" content="测试">
+  <link rel="canonical" href="https://3wfd2o5w1y.xlog.ink/">
+  <meta property="og:title" content="测试">
+  <meta property="og:description" content="测试">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://3wfd2o5w1y.xlog.ink/">
+  <link rel="stylesheet" href="/assets/css/base.css">
+</head>
+<body class="">
+  <div class="container">
+    <div class="header">
+      <div class="title">测试</div>
+    </div>    <div class="section">测试</div>    <div class="section">
+      <h2>链接</h2>
+      <div class="links"><a class="link-btn" href="https://kaks.com" target="_blank" rel="nofollow noopener"><strong>测试</strong><span>https://kaks.com</span></a></div>
+      <div class="help" style="margin-top:10px;">生成时间: <span class="code" title="UTC ISO8601">2025-10-22T03:54:29+00:00</span></div>
+    </div>
+
+    <div id="footer-slot" class="footer-slot"></div>
+  </div>
+
+  <!-- 运行时注入 Footer -->
+  <script>
+  (function(){
+    fetch("/partials/footer.html", {cache:"no-store"})
+      .then(r => { if(!r.ok) throw new Error(r.status); return r.text(); })
+      .then(html => { const slot=document.getElementById("footer-slot"); if(slot) slot.innerHTML = html; })
+      .catch(()=>{});
+  })();
+  </script>
+</body>
+</html>
