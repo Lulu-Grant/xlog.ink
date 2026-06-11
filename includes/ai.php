@@ -152,6 +152,9 @@ function ai_mock_chat(array $messages) {
     if (preg_match('/图片|照片|素材|上传|配图|logo|主视觉|产品图|活动图/i', $last)) {
         return "可以上传图片。请为每张图写一句用途说明，比如“页面顶部主视觉”或“产品细节图”。\n\n[[ACTION:UPLOAD slot=hero hint=页面顶部主视觉]]";
     }
+    if (preg_match('/直接生成|开始生成|可以生成|生成吧|发布吧|上线吧|重新生成/i', $last)) {
+        return "好的，要点已齐，我现在开始生成页面。\n\n[[ACTION:PUBLISH reason=用户已确认生成]]";
+    }
     return "我已记录你的需求。为了让页面更完整，请再补充目标受众、希望的视觉风格，以及是否有联系方式或行动按钮。\n\n如果现在信息已经够用，也可以直接点击生成页面。\n\n[[ACTION:READY reason=需求已基本完整]]";
 }
 

@@ -71,7 +71,7 @@ function extract_chat_action($text) {
     $text = (string)$text;
     if (preg_match('/\[\[ACTION:([A-Z]+)((?:\s+\w+=\S+)*)\]\]\s*$/u', $text, $m)) {
         $type = strtolower($m[1]);
-        if (in_array($type, ['upload', 'ready', 'email'], true)) {
+        if (in_array($type, ['upload', 'ready', 'publish', 'email'], true)) {
             return ['type' => $type, 'params' => parse_action_params($m[2] ?? '')];
         }
         return null;

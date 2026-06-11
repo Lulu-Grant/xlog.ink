@@ -9,6 +9,7 @@
     previewCard: null,
     previewTimer: null,
     awaitingEmail: false,
+    pendingAutoPublish: null,
   };
 
   var $ = function (s) { return document.querySelector(s); };
@@ -284,7 +285,20 @@
     var params = action.params || {};
     if (action.type === 'upload') addUploadCard(params);
     else if (action.type === 'ready') showGenerateCard(params.reason || '信息已经足够。');
+    else if (action.type === 'publish') state.pendingAutoPublish = params;
     else if (action.type === 'email') showEmailCard();
+  }
+
+  function runAutoPublish(params) {
+    params = params || {};
+    if (document.body.dataset.turnstileEnabled === '1') {
+      addMessage('system', '已确认生成。请先完成人机验证，验证通过后会开始生成。');
+      state.readyShown = false;
+      showPublishConfirmCard();
+      return;
+    }
+    addMessage('system', params.reason ? '已确认生成：' + params.reason : '已确认生成，正在开始发布。');
+    publish({ isAdult: false });
   }
 
   function addUploadCard(params) {
@@ -462,10 +476,15 @@
         error: function (d) { addMessage('system', d.message || 'AI 对话失败'); }
       });
     }).then(function () {
-      if (publishIntent) showGenerateCard('你刚才提到了生成或发布，可以从这里确认生成。');
+      if (!state.pendingAutoPublish && publishIntent) showGenerateCard('你刚才提到了生成或发布，可以从这里确认生成。');
     }).finally(function () {
       ai.classList.remove('is-typing');
       setBusy(false);
+      if (state.pendingAutoPublish) {
+        var autoPublish = state.pendingAutoPublish;
+        state.pendingAutoPublish = null;
+        runAutoPublish(autoPublish);
+      }
     });
   }
 
