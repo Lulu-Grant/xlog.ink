@@ -15,7 +15,7 @@ $turnstileSiteKey = xlog_config('turnstile.site_key', '');
   <meta property="og:title" content="xlog.ink - AI 个人页面生成">
   <meta property="og:description" content="聊天、上传图片、生成自由 HTML 页面，并自动分发到二级域名。">
   <meta property="og:image" content="/assets/og/cover.jpg">
-  <link rel="stylesheet" href="/css/page-ai.css?v=20260611v9">
+  <link rel="stylesheet" href="/css/page-ai.css?v=20260611v10">
   <link rel="icon" href="/favicon.ico">
   <?php if ($turnstileEnabled && $turnstileSiteKey !== ''): ?>
   <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
@@ -62,38 +62,10 @@ $turnstileSiteKey = xlog_config('turnstile.site_key', '');
 
       <section class="chat-canvas">
         <div id="messages" class="messages" aria-live="polite"></div>
-
-        <div class="preset-row" id="presetList" aria-label="Page type presets">
-          <button data-prompt="我想创建一个个人名片页面，请引导我补充必要信息。">名片</button>
-          <button data-prompt="我想创建一个产品或服务宣传海报页面，请帮我整理需求。">宣传海报</button>
-          <button data-prompt="我想创建一篇文章页面，请问我需要哪些内容。">文章页面</button>
-          <button data-prompt="我想创建一个活动页面，请引导我提供活动名称、时间、地址和联系方式。">活动页面</button>
-          <button data-prompt="我想自由创建一个页面，我会直接描述。">自由描述</button>
-        </div>
-
-        <div class="generate-strip">
-          <button id="publishBtn" class="publish-btn" type="button">生成页面</button>
-        </div>
-      </section>
-
-      <section id="deliveryBox" class="delivery-slot" aria-live="polite">
-        <span>生成后会出现页面 URL、复制按钮、二维码下载和邮箱修改入口。</span>
-      </section>
-
-      <section id="publishOptions" class="publish-options">
-        <label class="adult-toggle">
-          <input id="isAdultPage" type="checkbox">
-          <span>此页面包含 18+ 成人内容，发布后先显示确认页</span>
-        </label>
-        <?php if ($turnstileEnabled && $turnstileSiteKey !== ''): ?>
-        <div id="turnstileBox" class="turnstile-box">
-          <div class="cf-turnstile" data-sitekey="<?php echo h($turnstileSiteKey); ?>" data-theme="light"></div>
-        </div>
-        <?php endif; ?>
       </section>
 
       <form id="composer" class="composer">
-        <textarea id="messageInput" rows="1" placeholder="继续描述你的需求，或直接点击生成..."></textarea>
+        <textarea id="messageInput" rows="1" placeholder="继续描述你的页面..."></textarea>
         <button type="submit" aria-label="发送">➤</button>
       </form>
     </section>
@@ -103,6 +75,6 @@ $turnstileSiteKey = xlog_config('turnstile.site_key', '');
     </section>
   </main>
   <script src="/js/qrcode.min.js?v=1.4.4"></script>
-  <script src="/js/ai-app.js?v=20260611v10"></script>
+  <script src="/js/ai-app.js?v=20260611v11"></script>
 </body>
 </html>

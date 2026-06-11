@@ -4,6 +4,8 @@
     busy: false,
     lastUrl: '',
     user: null,
+    readyShown: false,
+    publishCard: null,
   };
 
   var $ = function (s) { return document.querySelector(s); };
@@ -17,6 +19,83 @@
     messages.appendChild(el);
     messages.scrollTop = messages.scrollHeight;
     return el;
+  }
+
+  function addActionCard(type, html) {
+    var card = document.createElement('div');
+    card.className = 'action-card ' + type;
+    card.innerHTML = html;
+    messages.appendChild(card);
+    messages.scrollTop = messages.scrollHeight;
+    return card;
+  }
+
+  function disableCard(card) {
+    if (!card) return;
+    card.dataset.disabled = '1';
+    Array.prototype.forEach.call(card.querySelectorAll('button, input'), function (el) {
+      el.disabled = true;
+    });
+  }
+
+  function renderPresetCard() {
+    if (document.querySelector('.preset-card')) return;
+    addActionCard('preset-card',
+      '<div class="action-title">先选一个方向，或者直接输入你的想法</div>' +
+      '<div class="preset-row" aria-label="Page type presets">' +
+      '<button data-prompt="我想创建一个个人名片页面，请引导我补充必要信息。">名片</button>' +
+      '<button data-prompt="我想创建一个产品或服务宣传海报页面，请帮我整理需求。">宣传海报</button>' +
+      '<button data-prompt="我想创建一篇文章页面，请问我需要哪些内容。">文章页面</button>' +
+      '<button data-prompt="我想创建一个活动页面，请引导我提供活动名称、时间、地址和联系方式。">活动页面</button>' +
+      '<button data-prompt="我想自由创建一个页面，我会直接描述。">自由描述</button>' +
+      '</div>');
+  }
+
+  function showGenerateCard(reason) {
+    if (!state.sessionId || state.readyShown) return;
+    state.readyShown = true;
+    addActionCard('generate-card',
+      '<div class="action-title">现在可以生成页面</div>' +
+      '<p>' + escapeHtml(reason || '信息已经足够，也可以继续补充细节。') + '</p>' +
+      '<div class="inline-actions">' +
+      '<button type="button" class="publish-btn" data-open-publish="1">生成页面</button>' +
+      '</div>');
+  }
+
+  function showPublishConfirmCard() {
+    if (!state.sessionId || state.busy) return;
+    if (state.publishCard && document.body.contains(state.publishCard)) {
+      messages.scrollTop = messages.scrollHeight;
+      return;
+    }
+    var turnstile = '';
+    if (document.body.dataset.turnstileEnabled === '1') {
+      turnstile = '<div class="turnstile-box"><div class="inline-turnstile"></div></div>';
+    }
+    state.publishCard = addActionCard('publish-confirm-card',
+      '<div class="action-title">生成前确认</div>' +
+      '<p>确认后会调用生成模型并发布到专属二级域名。生成期间请保持当前窗口打开。</p>' +
+      '<label class="adult-toggle">' +
+      '<input class="inline-adult-checkbox" type="checkbox">' +
+      '<span>此页面包含 18+ 成人内容，发布后先显示确认页</span>' +
+      '</label>' +
+      turnstile +
+      '<div class="inline-actions">' +
+      '<button type="button" class="publish-btn" data-confirm-publish="1">确认生成</button>' +
+      '<button type="button" class="ghost-btn" data-continue-chat="1">继续补充</button>' +
+      '</div>');
+    renderInlineTurnstile(state.publishCard);
+  }
+
+  function renderInlineTurnstile(card) {
+    if (!card || document.body.dataset.turnstileEnabled !== '1') return;
+    var sitekey = document.body.dataset.turnstileSitekey || '';
+    var target = card.querySelector('.inline-turnstile');
+    if (!sitekey || !target || !window.turnstile || card.dataset.turnstileWidget) return;
+    card.dataset.turnstileWidget = window.turnstile.render(target, {
+      sitekey: sitekey,
+      theme: 'light'
+    });
   }
 
   function maybeShowUploadCard(text) {
@@ -91,6 +170,7 @@
       state.sessionId = data.session_id;
       setQuota(data.quota);
       addMessage('assistant', data.greeting);
+      renderPresetCard();
     }).catch(function () {
       addMessage('system', '会话创建失败，请稍后刷新重试。');
     });
@@ -125,6 +205,7 @@
 
   function sendMessage(text) {
     if (!text || state.busy) return;
+    var publishIntent = /(直接)?(生成|发布|上线|创建页面|开始生成|开始做)/.test(text);
     state.busy = true;
     addMessage('user', text);
     input.value = '';
@@ -141,40 +222,47 @@
           messages.scrollTop = messages.scrollHeight;
         },
         ready: function () {
-          $('#publishBtn').classList.add('is-ready');
-          addMessage('system', '信息已经足够，可以生成页面。');
+          showGenerateCard('AI 已经判断信息足够，可以开始生成。');
         },
         notice: function (d) { addMessage('system', d.message || '系统提醒'); },
         error: function (d) { addMessage('system', d.message || 'AI 对话失败'); }
       });
     }).then(function () {
       maybeShowUploadCard(ai.textContent);
+      if (publishIntent) showGenerateCard('你刚才提到了生成或发布，可以从这里确认生成。');
     }).finally(function () { state.busy = false; });
   }
 
-  function publish() {
+  function publish(options) {
     if (!state.sessionId || state.busy) return;
     state.busy = true;
     state.lastUrl = '';
     var publishTerminal = false;
     addMessage('system', '开始生成页面，请保持当前窗口打开。');
     var turnstileToken = '';
-    if (document.body.dataset.turnstileEnabled === '1' && window.turnstile) {
-      var responseEl = document.querySelector('[name="cf-turnstile-response"]');
-      turnstileToken = responseEl ? responseEl.value : '';
+    if (document.body.dataset.turnstileEnabled === '1') {
+      if (options && options.card) renderInlineTurnstile(options.card);
+      var widgetId = options && options.turnstileWidget !== undefined ? options.turnstileWidget : (options && options.card ? options.card.dataset.turnstileWidget : undefined);
+      if (window.turnstile && widgetId !== undefined) {
+        turnstileToken = window.turnstile.getResponse(widgetId);
+      } else {
+        var responseEl = document.querySelector('[name="cf-turnstile-response"]');
+        turnstileToken = responseEl ? responseEl.value : '';
+      }
       if (!turnstileToken) {
         addMessage('system', '请先完成人机验证，再生成页面。');
         state.busy = false;
         return;
       }
     }
+    if (options && options.card) disableCard(options.card);
     fetch('/api/publish.php', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         session_id: state.sessionId,
         turnstile_token: turnstileToken,
-        is_adult: !!($('#isAdultPage') && $('#isAdultPage').checked)
+        is_adult: !!(options && options.isAdult)
       })
     }).then(function (r) {
       var generatedChars = 0;
@@ -200,7 +288,7 @@
         result: function (d) {
           publishTerminal = true;
           state.lastUrl = d.url;
-          addMessage('assistant', '你的页面已上线：\n' + d.url + '\n\n要不要留个邮箱？以后可以用邮件里的链接修改这个页面。');
+          addMessage('assistant', '你的页面已上线。要不要留个邮箱？以后可以用邮件里的链接修改这个页面。');
           renderDelivery(d.url);
           api('/api/auth/me.php', {}).then(function (me) { setUser(me.user); setQuota(me.quota); }).catch(function () {});
           if (window.turnstile) window.turnstile.reset();
@@ -211,34 +299,29 @@
     }).catch(function () {
       addMessage('system', '生成连接中断。请稍后重试，或减少页面内容后再生成。');
       if (window.turnstile) window.turnstile.reset();
-    }).finally(function () { state.busy = false; });
+    }).finally(function () {
+      state.busy = false;
+      state.publishCard = null;
+    });
   }
 
   function renderDelivery(url) {
-    $('#deliveryBox').innerHTML =
-      '<div class="delivery-card">' +
-      '<div class="url-box" id="pageUrl">' + escapeHtml(url) + '</div>' +
-      '<canvas id="qrCanvas" width="180" height="180"></canvas>' +
+    var card = addActionCard('delivery-card',
+      '<div class="url-box">' + escapeHtml(url) + '</div>' +
+      '<canvas class="qr-canvas" width="180" height="180"></canvas>' +
       '<div class="delivery-actions">' +
-      '<button type="button" id="copyUrlBtn">复制链接</button>' +
-      '<button type="button" id="downloadQrBtn">下载二维码</button>' +
+      '<button type="button" data-copy-url="1">复制链接</button>' +
+      '<button type="button" data-download-qr="1">下载二维码</button>' +
       '<a href="' + escapeAttr(url) + '" target="_blank" rel="noopener">打开页面</a>' +
       '</div>' +
-      '<div class="email-row"><input id="ownerEmail" type="email" placeholder="输入邮箱，获得后续修改链接"><button type="button" id="bindEmailBtn">发送修改链接</button></div>' +
-      '</div>';
-    drawPseudoQr($('#qrCanvas'), url);
-    $('#copyUrlBtn').onclick = function () { navigator.clipboard.writeText(url); };
-    $('#downloadQrBtn').onclick = function () {
-      var a = document.createElement('a');
-      a.download = 'xlog-page-qr.png';
-      a.href = $('#qrCanvas').toDataURL('image/png');
-      a.click();
-    };
-    $('#bindEmailBtn').onclick = bindEmail;
+      '<div class="email-row"><input class="owner-email" type="email" placeholder="输入邮箱，获得后续修改链接"><button type="button" data-bind-email="1">发送修改链接</button></div>');
+    card.dataset.pageUrl = url;
+    drawPseudoQr(card.querySelector('.qr-canvas'), url);
   }
 
-  function bindEmail() {
-    var email = $('#ownerEmail').value.trim();
+  function bindEmail(card) {
+    var emailInput = card ? card.querySelector('.owner-email') : null;
+    var email = emailInput ? emailInput.value.trim() : '';
     if (!email) return;
     api('/api/page-email.php', { session_id: state.sessionId, email: email }).then(function (r) {
       if (r.error) addMessage('system', r.error.message);
@@ -292,8 +375,8 @@
       state.sessionId = r.session_id;
       state.lastUrl = '';
       $('#messages').innerHTML = '';
-      $('#deliveryBox').innerHTML = '<span>修改完成后会覆盖原页面 URL。</span>';
-      $('#publishBtn').classList.add('is-ready');
+      state.readyShown = false;
+      state.publishCard = null;
       toggleMyPages(false);
       addMessage('assistant', '已进入修改模式。告诉我你想调整哪里，完成后点击生成会覆盖原页面。');
     });
@@ -363,10 +446,61 @@
     e.preventDefault();
     sendMessage(input.value.trim());
   });
-  $('#presetList').addEventListener('click', function (e) {
-    if (e.target.matches('button[data-prompt]')) sendMessage(e.target.dataset.prompt);
+
+  messages.addEventListener('click', function (e) {
+    var promptBtn = e.target.closest('button[data-prompt]');
+    if (promptBtn) {
+      disableCard(promptBtn.closest('.action-card'));
+      sendMessage(promptBtn.dataset.prompt);
+      return;
+    }
+    var openPublish = e.target.closest('button[data-open-publish]');
+    if (openPublish) {
+      disableCard(openPublish.closest('.action-card'));
+      showPublishConfirmCard();
+      return;
+    }
+    var confirmPublish = e.target.closest('button[data-confirm-publish]');
+    if (confirmPublish) {
+      var publishCard = confirmPublish.closest('.action-card');
+      var checkbox = publishCard ? publishCard.querySelector('.inline-adult-checkbox') : null;
+      var widget = publishCard && publishCard.dataset.turnstileWidget !== undefined ? publishCard.dataset.turnstileWidget : undefined;
+      publish({
+        isAdult: !!(checkbox && checkbox.checked),
+        turnstileWidget: widget,
+        card: publishCard
+      });
+      return;
+    }
+    var continueChat = e.target.closest('button[data-continue-chat]');
+    if (continueChat) {
+      disableCard(continueChat.closest('.action-card'));
+      state.readyShown = false;
+      state.publishCard = null;
+      addMessage('system', '可以继续补充需求，准备好后再说“生成页面”。');
+      return;
+    }
+    var delivery = e.target.closest('.delivery-card');
+    if (!delivery) return;
+    var url = delivery.dataset.pageUrl || state.lastUrl;
+    if (e.target.closest('button[data-copy-url]')) {
+      navigator.clipboard.writeText(url);
+      addMessage('system', '链接已复制。');
+      return;
+    }
+    if (e.target.closest('button[data-download-qr]')) {
+      var canvas = delivery.querySelector('.qr-canvas');
+      if (!canvas) return;
+      var a = document.createElement('a');
+      a.download = 'xlog-page-qr.png';
+      a.href = canvas.toDataURL('image/png');
+      a.click();
+      return;
+    }
+    if (e.target.closest('button[data-bind-email]')) {
+      bindEmail(delivery);
+    }
   });
-  $('#publishBtn').addEventListener('click', publish);
   $('#loginToggle').addEventListener('click', function () {
     var box = $('#accountBox');
     box.hidden = !box.hidden;
