@@ -142,20 +142,25 @@
     return url + (url.indexOf('?') === -1 ? '?' : '&') + 't=' + Date.now();
   }
 
-  function maybeShowUploadCard(text) {
-    if (!/(上传|图片|照片|资料图|主视觉|头像|产品图|活动图|素材|配图|logo|门头|店面|环境|作品|截图|海报图|产品照|image|photo|asset|material)/i.test(text || '')) return;
-    if (document.querySelector('.upload-card[data-active="1"]')) return;
-    addUploadCard();
+  function handleAction(action) {
+    if (!action || !action.type) return;
+    var params = action.params || {};
+    if (action.type === 'upload') addUploadCard(params);
+    else if (action.type === 'ready') showGenerateCard(params.reason || '信息已经足够。');
+    else if (action.type === 'email') showEmailCard();
   }
 
-  function addUploadCard() {
+  function addUploadCard(params) {
+    params = params || {};
+    if (document.querySelector('.upload-card[data-active="1"]')) return;
     var card = document.createElement('div');
     card.className = 'upload-card';
     card.dataset.active = '1';
+    card.dataset.slot = params.slot || '';
     card.innerHTML =
       '<strong>上传资料图</strong>' +
       '<p>选择图片并写一句用途说明，例如“活动主视觉”“产品细节”“头像”。图片会自动转成适合网页分发的 WebP。</p>' +
-      '<input class="upload-caption" type="text" placeholder="图片说明">' +
+      '<input class="upload-caption" type="text" placeholder="图片说明" value="' + escapeAttr(params.hint || '') + '">' +
       '<div class="upload-card-actions">' +
       '<label>选择图片<input class="upload-file" type="file" accept="image/*"></label>' +
       '<button type="button" class="skip-upload">没有图片，跳过</button>' +
@@ -163,7 +168,7 @@
     messages.appendChild(card);
     messages.scrollTop = messages.scrollHeight;
     card.querySelector('.upload-file').addEventListener('change', function (e) {
-      uploadImage(e.target.files[0], card.querySelector('.upload-caption').value.trim(), card);
+      uploadImage(e.target.files[0], card.querySelector('.upload-caption').value.trim(), card.dataset.slot || '', card);
     });
     card.querySelector('.skip-upload').addEventListener('click', function () {
       card.dataset.active = '0';
@@ -254,7 +259,6 @@
     addMessage('user', text);
     input.value = '';
     var ai = addMessage('assistant', '');
-    var streamTail = '';
     fetch('/api/chat.php', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -262,29 +266,14 @@
     }).then(function (r) {
       return readSse(r, {
         delta: function (d) {
-          streamTail += d.text || '';
-          if (streamTail.length > 12) {
-            ai.textContent += streamTail.slice(0, -12);
-            streamTail = streamTail.slice(-12);
-          }
-          ai.textContent = ai.textContent.replace(/\s*\[(READY|UPLOAD)\]\s*$/g, '');
+          ai.textContent += d.text || '';
           messages.scrollTop = messages.scrollHeight;
         },
-        upload_prompt: function () {
-          addUploadCard();
-        },
-        ready: function () {
-          showGenerateCard('AI 已经判断信息足够，可以开始生成。');
-        },
+        action: handleAction,
         notice: function (d) { addMessage('system', d.message || '系统提醒'); },
         error: function (d) { addMessage('system', d.message || 'AI 对话失败'); }
       });
     }).then(function () {
-      if (streamTail) {
-        ai.textContent += streamTail.replace(/\s*\[(READY|UPLOAD)\]\s*$/g, '');
-        streamTail = '';
-      }
-      maybeShowUploadCard(ai.textContent);
       if (publishIntent) showGenerateCard('你刚才提到了生成或发布，可以从这里确认生成。');
     }).finally(function () { state.busy = false; });
   }
@@ -390,6 +379,19 @@
     }
   }
 
+  function showEmailCard() {
+    var delivery = document.querySelector('.delivery-card');
+    if (delivery) {
+      var existing = delivery.querySelector('.owner-email');
+      if (existing) existing.focus();
+      return;
+    }
+    addActionCard('delivery-card email-card',
+      '<div class="action-title">留下邮箱，获得后续修改链接</div>' +
+      '<p>页面发布后可以把修改入口发送到你的邮箱。</p>' +
+      '<div class="email-row"><input class="owner-email" type="email" placeholder="输入邮箱"><button type="button" data-bind-email="1">发送修改链接</button></div>');
+  }
+
   function bindEmail(card) {
     var emailInput = card ? card.querySelector('.owner-email') : null;
     var email = emailInput ? emailInput.value.trim() : '';
@@ -453,11 +455,12 @@
     });
   }
 
-  function uploadImage(file, caption, card) {
+  function uploadImage(file, caption, slot, card) {
     if (!state.sessionId || !file) return;
     var fd = new FormData();
     fd.append('session_id', state.sessionId);
     fd.append('caption', caption || '');
+    fd.append('slot', slot || '');
     fd.append('file', file);
     fetch('/api/upload.php', { method: 'POST', body: fd }).then(function (r) { return r.json(); }).then(function (d) {
       if (d.error) { addMessage('system', d.error.message); return; }

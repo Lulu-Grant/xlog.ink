@@ -11,7 +11,7 @@ function image_public_url($path) {
     return rtrim(xlog_config('base_url'), '/') . $path;
 }
 
-function image_process_upload($sessionId, array $file, $caption = '') {
+function image_process_upload($sessionId, array $file, $caption = '', $slot = '') {
     if (($file['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
         throw new RuntimeException('Upload failed');
     }
@@ -44,14 +44,16 @@ function image_process_upload($sessionId, array $file, $caption = '') {
     }
 
     $rel = '/site-assets/tmp/' . $sessionId . '/' . $n . '.webp';
+    $slot = in_array($slot, ['hero', 'avatar', 'product', 'gallery'], true) ? $slot : '';
     db_exec(
-        'INSERT INTO images (session_id, path, caption, width, height, created_at) VALUES (?, ?, ?, ?, ?, ?)',
-        [$sessionId, $rel, trim((string)$caption), $newW, $newH, now_iso()]
+        'INSERT INTO images (session_id, path, caption, slot, width, height, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
+        [$sessionId, $rel, trim((string)$caption), $slot, $newW, $newH, now_iso()]
     );
     return [
         'id' => (int)db()->lastInsertId(),
         'url' => image_public_url($rel),
         'path' => $rel,
+        'slot' => $slot,
         'width' => $newW,
         'height' => $newH,
     ];
@@ -121,12 +123,13 @@ function move_session_assets_to_slug($sessionId, $slug, $html) {
 }
 
 function session_images_context($sessionId) {
-    $rows = db_all('SELECT path, caption, width, height FROM images WHERE session_id = ? ORDER BY id ASC', [$sessionId]);
+    $rows = db_all('SELECT path, caption, slot, width, height FROM images WHERE session_id = ? ORDER BY id ASC', [$sessionId]);
     $out = [];
     foreach ($rows as $row) {
         $out[] = [
             'url' => image_public_url($row['path']),
             'description' => $row['caption'],
+            'slot' => $row['slot'] ?? '',
             'width' => (int)$row['width'],
             'height' => (int)$row['height'],
         ];

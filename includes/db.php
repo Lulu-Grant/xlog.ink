@@ -72,6 +72,7 @@ CREATE TABLE IF NOT EXISTS images (
     slug TEXT,
     path TEXT NOT NULL,
     caption TEXT DEFAULT '',
+    slot TEXT DEFAULT '',
     width INTEGER,
     height INTEGER,
     created_at TEXT NOT NULL
@@ -126,6 +127,7 @@ CREATE TABLE IF NOT EXISTS mail_events (
 CREATE INDEX IF NOT EXISTS idx_mail_events_lookup ON mail_events(kind, event_key, created_at);
 ");
     db_ensure_column($pdo, 'sessions', 'edit_mode', "TEXT NOT NULL DEFAULT ''");
+    db_ensure_column($pdo, 'images', 'slot', "TEXT DEFAULT ''");
 }
 
 function db_ensure_column(PDO $pdo, $table, $column, $definition) {

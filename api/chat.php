@@ -28,21 +28,29 @@ $modelMessages = array_merge($modelMessages, truncate_messages_for_chat($history
 
 sse_start();
 $assistant = '';
+$streamTail = '';
+$streamTailLimit = 160;
 try {
-    $usage = ai_stream_chat($modelMessages, function ($delta) use (&$assistant) {
+    $usage = ai_stream_chat($modelMessages, function ($delta) use (&$assistant, &$streamTail, $streamTailLimit) {
         $assistant .= $delta;
-        sse_event('delta', ['text' => $delta]);
+        $streamTail .= $delta;
+        if (mb_strlen($streamTail, 'UTF-8') > $streamTailLimit) {
+            $sendLen = mb_strlen($streamTail, 'UTF-8') - $streamTailLimit;
+            $send = mb_substr($streamTail, 0, $sendLen, 'UTF-8');
+            $streamTail = mb_substr($streamTail, $sendLen, null, 'UTF-8');
+            if ($send !== '') sse_event('delta', ['text' => $send]);
+        }
     });
-    $ready = preg_match('/\n?\s*\[READY\]\s*$/u', $assistant) === 1;
-    $uploadPrompt = preg_match('/\n?\s*\[UPLOAD\]\s*$/u', $assistant) === 1;
-    $clean = preg_replace('/(?:\n?\s*\[(?:READY|UPLOAD)\]\s*)+$/u', '', $assistant);
+    $action = extract_chat_action($assistant);
+    $cleanTail = strip_chat_action_markers($streamTail);
+    if ($cleanTail !== '') sse_event('delta', ['text' => $cleanTail]);
+    $clean = strip_chat_action_markers($assistant);
     append_session_message($sessionId, 'assistant', trim($clean));
-    if ($uploadPrompt) {
-        sse_event('upload_prompt', []);
-    }
-    if ($ready) {
+    if ($action && $action['type'] === 'ready') {
         db_exec('UPDATE sessions SET state = ?, updated_at = ? WHERE id = ?', ['ready', now_iso(), $sessionId]);
-        sse_event('ready', []);
+    }
+    if ($action) {
+        sse_event('action', $action);
     }
     sse_event('done', ['usage' => $usage]);
 } catch (Throwable $e) {
@@ -57,4 +65,45 @@ function truncate_messages_for_chat(array $messages) {
     $last = array_slice($messages, -20);
     $middle = [['role' => 'assistant', 'content' => '（中间较早对话已省略，继续基于最近上下文引导用户。）']];
     return array_map(fn($m) => ['role' => $m['role'], 'content' => $m['content']], array_merge($first, $middle, $last));
+}
+
+function extract_chat_action($text) {
+    $text = (string)$text;
+    if (preg_match('/\[\[ACTION:([A-Z]+)((?:\s+\w+=\S+)*)\]\]\s*$/u', $text, $m)) {
+        $type = strtolower($m[1]);
+        if (in_array($type, ['upload', 'ready', 'email'], true)) {
+            return ['type' => $type, 'params' => parse_action_params($m[2] ?? '')];
+        }
+        return null;
+    }
+    if (preg_match('/\n?\s*\[READY\]\s*$/u', $text)) {
+        return ['type' => 'ready', 'params' => []];
+    }
+    if (preg_match('/\n?\s*\[UPLOAD\]\s*$/u', $text)) {
+        return ['type' => 'upload', 'params' => []];
+    }
+    return null;
+}
+
+function parse_action_params($raw) {
+    $params = [];
+    if (preg_match_all('/\s+(\w+)=([^\s\]]+)/u', (string)$raw, $matches, PREG_SET_ORDER)) {
+        foreach ($matches as $match) {
+            $key = strtolower($match[1]);
+            $value = str_replace('_', ' ', $match[2]);
+            if (in_array($key, ['slot', 'hint', 'reason'], true)) {
+                $params[$key] = mb_substr($value, 0, 120, 'UTF-8');
+            }
+        }
+    }
+    if (isset($params['slot']) && !in_array($params['slot'], ['hero', 'avatar', 'product', 'gallery'], true)) {
+        unset($params['slot']);
+    }
+    return $params;
+}
+
+function strip_chat_action_markers($text) {
+    $text = preg_replace('/(?:\n?\s*\[\[ACTION:[^\]]*\]\]\s*)+$/u', '', (string)$text);
+    $text = preg_replace('/(?:\n?\s*\[(?:READY|UPLOAD)\]\s*)+$/u', '', $text);
+    return $text;
 }

@@ -38,8 +38,8 @@
    │
    ▼
 ④ 生成触发（双路径）
-   路径 A：AI 判断信息足够，回复末尾输出约定标记 [READY]
-           → 前端检测到，亮出「✨ 生成页面」按钮
+   路径 A：AI 判断信息足够，回复末尾输出 [[ACTION:READY ...]]
+           → 后端剥离标记并发 action 事件，前端亮出「生成页面」按钮
    路径 B：用户任何时候都可点「直接生成」
    生成前过 Turnstile + 额度检查
    │
@@ -168,7 +168,7 @@ Nginx 通配符 *.xlog.ink → slug 映射（沿用现有机制）
 - 统一非流式接口（用于辅助性短调用）
 - 错误归一化：限流 / 超时 / 网关错误转为统一错误码，前端可读
 
-**弱模型设计约束（重要）**：gemma 26B 的 tool-calling 不可靠，因此对话阶段**不使用工具调用**。生成触发采用 `[READY]` 文本标记协议 + 用户手动按钮双路径（见 §5.2）。
+**弱模型设计约束（重要）**：gemma 26B 的 tool-calling 不可靠，因此对话阶段**不使用工具调用**。UI 唤起采用 `[[ACTION:TYPE k=v]]` 内联动作标记协议 + 用户手动按钮双路径（见 §5.2）。
 
 ### 2.4 目录结构
 
@@ -335,12 +335,12 @@ POST /api/chat.php             Content-Type: application/json
   { session_id, message }      用户消息（预置卡片点击也走这里）
   ← SSE 流：
      event: delta   data: {"text": "..."}        增量 token
-     event: ready   data: {}                      检测到 [READY]，前端亮生成按钮
+     event: action  data: {"type":"ready",...}    后端检测到动作标记，前端分发 UI
      event: notice  data: {"type":"quota", ...}   系统事件（额度提醒等）
      event: done    data: {"usage": {...}}
 ```
 
-后端职责：追加用户消息 → 组装 gemma 请求（system prompt + 截断后的历史）→ 流式转发 → 完成后剥离 `[READY]` 标记存库、置 `state=ready`。
+后端职责：追加用户消息 → 组装 gemma 请求（system prompt + 截断后的历史）→ 流式尾部缓冲 → 剥离 `[[ACTION:...]]` 标记存库 → 发 `action` SSE；若 type=ready 则置 `state=ready`。
 
 对话轮次限制：游客每 IP 每日 200 轮（`quota_counters kind=chat_turns`），超限返回 `notice` 并由 AI 话术引导。
 
@@ -422,9 +422,11 @@ GET  /api/auth/me.php          → { user: {email, daily_quota, used_today, cred
    但用户拒答或乱答也接受 —— 这些只是生成提示词，不做校验。
 3. 引导用户提供文案（粘贴现成的，或说出要求由生成环节代写），
    并提醒可以上传图片、为每张图写说明。
-4. 当你认为信息已足够生成一个像样的页面时，总结一遍收集到的要点，
-   并在回复的最末尾单独一行输出标记：[READY]
-   （除该标记外不要解释标记本身）
+4. 当你的回复需要唤起 UI 组件时，在回复最末尾单独一行输出动作标记：
+   - 上传图片：[[ACTION:UPLOAD slot=hero hint=活动主视觉]]
+   - 信息足够生成：[[ACTION:READY reason=核心信息已完整]]
+   - 引导留邮箱：[[ACTION:EMAIL]]
+   标记只作为 UI 信号，不向用户解释。
 
 【身份与额度】（由系统每轮注入最新值）
 当前用户：{guest|user}，今日剩余生成额度：{n}
@@ -441,15 +443,15 @@ GET  /api/auth/me.php          → { user: {email, daily_quota, used_today, cred
 
 - 身份/额度行作为 system prompt 末尾动态段注入（每轮更新）。固定部分在前、动态部分在后，给将来切换支持 prompt caching 的模型留好前缀稳定性。
 - 历史截断：超过 30 轮时保留「前 2 轮 + 最近 20 轮」，中间替换为一行摘要占位。
-- `[READY]` 协议：后端在流转发的同时做尾部缓冲检测，检测到即发 `event: ready`，存库时剥离标记。
+- `[[ACTION:...]]` 协议：后端在流转发时保留尾部缓冲，完成后剥离标记并发 `event: action`，前端按 `type` 分发 UI，用户永远不看到标记原文。
 
 ### 5.2 生成触发为何不用 tool-calling
 
 gemma-4-26B 是小模型，函数调用的可靠性不足以承担流程控制。流程控制权完全在后端：
 
-- AI 输出 `[READY]` → 仅仅是前端亮按钮的信号
+- AI 输出 `[[ACTION:READY ...]]` → 仅仅是前端亮按钮的信号
 - 真正的生成必须由用户点击按钮 → `POST /api/publish.php` → 后端裁决（Turnstile、额度）
-- 即使 AI 永远不输出 `[READY]`，用户也始终有「直接生成」按钮兜底
+- 即使 AI 永远不输出 `READY` 动作，用户也始终有「直接生成」按钮兜底
 
 ### 5.3 生成阶段 system prompt（prompts/gen-system.txt 框架）
 
@@ -588,7 +590,7 @@ function consume_quota(string $kind /* generate|chat_turn */): array
 | 里程碑 | 内容 | 验收标准 |
 |---|---|---|
 | **M1 地基** | 配置外置；SQLite 建表 + db.php；ai.php 适配层；**实测 api.3s3.org 上 gemma 与 sonnet 的端点格式与流式行为**；migrate-jsonl 脚本 | CLI 脚本能分别流式调通两个模型；旧数据进库 |
-| **M2 聊天** | 聊天 SPA（消息流、预置卡片、SSE 渲染）；session.php / chat.php；chat-system.txt 调教；[READY] 检测；轮次限制 | 浏览器内与 gemma 完整对话，按钮按协议出现 |
+| **M2 聊天** | 聊天 SPA（消息流、预置卡片、SSE 渲染）；session.php / chat.php；chat-system.txt 调教；`ACTION` 动作标记；轮次限制 | 浏览器内与 gemma 完整对话，按钮按协议出现 |
 | **M3 图片** | upload.php + imageproc.php；前端上传组件 + 说明输入；上下文注入；tmp 清理 cron | 上传任意 jpg/png 得到合规 webp URL，AI 能在对话中引用 |
 | **M4 生成交付** | publish.php 全流水线；gen-system.txt；HTML 校验链；落盘 + 资产迁移；交付卡片（复制 + 本地二维码） | 端到端：对话 → 生成 → 子域可访问 → 二维码可下载 |
 | **M5 用户体系** | 验证码登录全链路；quota.php 三级额度；AI 身份/额度注入与引导话术；me 接口与前端登录态 | 游客 10/天、用户 50/天准确执行；额度耗尽时 AI 正确引导 |
@@ -606,7 +608,10 @@ function consume_quota(string $kind /* generate|chat_turn */): array
 | 后端技术栈 | 继续 PHP，复用现有部署 |
 | 对话模型 | google/gemma-4-26B-A4B-it（省 token） |
 | 生成模型 | claude-sonnet-4-6，`/v1/messages`，流式 |
-| 对话阶段工具调用 | 不用；[READY] 标记 + 手动按钮双路径 |
+| 对话阶段工具调用 | 不用；会话模型输出内联动作标记 `[[ACTION:TYPE k=v]]` + 手动按钮双路径 |
+| 独立前置路由模型 | 不引入；避免每轮延迟叠加、成本倒挂和判断权错位 |
+| UI 唤起机制 | 语义路由由会话模型打 `UPLOAD/READY/EMAIL` 标记；确定性路由由前端事件直接响应 |
+| 标记剥离责任 | 后端流尾缓冲并剥离动作标记，前端只接收干净正文与 `action` SSE |
 | 生成前是否让弱模型总结简报 | 不总结，完整对话直接交给 sonnet（避免丢信息） |
 | 登录方式 | 邮箱验证码（passwordless） |
 | 游客/用户额度 | 10 / 50 页每天；邮箱用户=游客待遇+修改权 |

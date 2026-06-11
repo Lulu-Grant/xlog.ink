@@ -5,6 +5,7 @@ require_once __DIR__ . '/../includes/quota.php';
 require_method('POST');
 $sessionId = trim($_POST['session_id'] ?? '');
 $caption = trim($_POST['caption'] ?? '');
+$slot = normalize_image_slot($_POST['slot'] ?? '');
 if (!preg_match('/^[a-f0-9]{32}$/', $sessionId)) api_error('bad_session', 'Invalid session');
 $session = db_one('SELECT * FROM sessions WHERE id = ?', [$sessionId]);
 if (!$session) api_error('session_not_found', 'Session not found', 404);
@@ -15,8 +16,9 @@ $charge = consume_quota('upload_image');
 if (!$charge['ok']) api_error('upload_quota_exceeded', '今日图片上传次数已达上限。', 429);
 
 try {
-    $result = image_process_upload($sessionId, $_FILES['file'], $caption);
-    $msg = '[图片已上传: ' . $result['url'] . '] 说明: ' . ($caption !== '' ? $caption : '无');
+    $result = image_process_upload($sessionId, $_FILES['file'], $caption, $slot);
+    $slotText = $slot !== '' ? ' 版位: ' . $slot : '';
+    $msg = '[图片已上传: ' . $result['url'] . '] 说明: ' . ($caption !== '' ? $caption : '无') . $slotText;
     append_session_message($sessionId, 'user', $msg);
     api_json($result);
 } catch (Throwable $e) {
@@ -30,4 +32,9 @@ function upload_session_allowed(array $session) {
         return $userId && (int)$session['user_id'] === (int)$userId;
     }
     return empty($session['user_id']) && hash_equals((string)$session['ip'], client_ip());
+}
+
+function normalize_image_slot($slot) {
+    $slot = strtolower(trim((string)$slot));
+    return in_array($slot, ['hero', 'avatar', 'product', 'gallery'], true) ? $slot : '';
 }
