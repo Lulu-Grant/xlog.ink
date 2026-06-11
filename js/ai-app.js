@@ -13,13 +13,44 @@
   var $ = function (s) { return document.querySelector(s); };
   var messages = $('#messages');
   var input = $('#messageInput');
+  var sendBtn = document.querySelector('#composer button[type="submit"]');
+  var coarsePointer = window.matchMedia('(pointer: coarse)').matches;
+
+  var jumpBtn = document.createElement('button');
+  jumpBtn.type = 'button';
+  jumpBtn.className = 'jump-latest';
+  jumpBtn.textContent = '↓ 回到最新';
+  jumpBtn.hidden = true;
+  document.querySelector('.chat-canvas').appendChild(jumpBtn);
+  jumpBtn.addEventListener('click', function () { scrollDown(true); });
+
+  var follow = true;
+  messages.addEventListener('scroll', function () {
+    follow = messages.scrollHeight - messages.scrollTop - messages.clientHeight < 80;
+    jumpBtn.hidden = follow;
+  });
+
+  function scrollDown(force) {
+    if (force) follow = true;
+    if (follow) {
+      messages.scrollTop = messages.scrollHeight;
+      jumpBtn.hidden = true;
+    } else {
+      jumpBtn.hidden = false;
+    }
+  }
+
+  function setBusy(busy) {
+    state.busy = busy;
+    if (sendBtn) sendBtn.disabled = busy;
+  }
 
   function addMessage(role, text) {
     var el = document.createElement('div');
     el.className = 'msg ' + role;
     el.textContent = text;
     messages.appendChild(el);
-    messages.scrollTop = messages.scrollHeight;
+    scrollDown(role === 'user');
     return el;
   }
 
@@ -28,7 +59,7 @@
     card.className = 'action-card ' + type;
     card.innerHTML = html;
     messages.appendChild(card);
-    messages.scrollTop = messages.scrollHeight;
+    scrollDown(false);
     return card;
   }
 
@@ -67,7 +98,7 @@
   function showPublishConfirmCard() {
     if (!state.sessionId || state.busy) return;
     if (state.publishCard && document.body.contains(state.publishCard)) {
-      messages.scrollTop = messages.scrollHeight;
+      scrollDown(true);
       return;
     }
     var turnstile = '';
@@ -122,7 +153,7 @@
       }
       iframe.src = previewUrlWithTick(iframe.dataset.previewUrl || url);
     }, refreshMs || 1000);
-    messages.scrollTop = messages.scrollHeight;
+    scrollDown(false);
   }
 
   function updateLivePreviewStatus(text) {
@@ -166,7 +197,7 @@
       '<button type="button" class="skip-upload">没有图片，跳过</button>' +
       '</div>';
     messages.appendChild(card);
-    messages.scrollTop = messages.scrollHeight;
+    scrollDown(false);
     card.querySelector('.upload-file').addEventListener('change', function (e) {
       uploadImage(e.target.files[0], card.querySelector('.upload-caption').value.trim(), card.dataset.slot || '', card);
     });
@@ -255,10 +286,12 @@
   function sendMessage(text) {
     if (!text || state.busy) return;
     var publishIntent = /(直接)?(生成|发布|上线|创建页面|开始生成|开始做)/.test(text);
-    state.busy = true;
+    setBusy(true);
     addMessage('user', text);
     input.value = '';
+    autogrow();
     var ai = addMessage('assistant', '');
+    ai.classList.add('is-typing');
     fetch('/api/chat.php', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -266,8 +299,9 @@
     }).then(function (r) {
       return readSse(r, {
         delta: function (d) {
+          if (d.text) ai.classList.remove('is-typing');
           ai.textContent += d.text || '';
-          messages.scrollTop = messages.scrollHeight;
+          scrollDown(false);
         },
         action: handleAction,
         notice: function (d) { addMessage('system', d.message || '系统提醒'); },
@@ -275,12 +309,15 @@
       });
     }).then(function () {
       if (publishIntent) showGenerateCard('你刚才提到了生成或发布，可以从这里确认生成。');
-    }).finally(function () { state.busy = false; });
+    }).finally(function () {
+      ai.classList.remove('is-typing');
+      setBusy(false);
+    });
   }
 
   function publish(options) {
     if (!state.sessionId || state.busy) return;
-    state.busy = true;
+    setBusy(true);
     state.lastUrl = '';
     var publishTerminal = false;
     addMessage('system', '开始生成页面，请保持当前窗口打开。');
@@ -296,7 +333,7 @@
       }
       if (!turnstileToken) {
         addMessage('system', '请先完成人机验证，再生成页面。');
-        state.busy = false;
+        setBusy(false);
         return;
       }
     }
@@ -357,7 +394,7 @@
       addMessage('system', '生成连接中断。请稍后重试，或减少页面内容后再生成。');
       if (window.turnstile) window.turnstile.reset();
     }).finally(function () {
-      state.busy = false;
+      setBusy(false);
       state.publishCard = null;
     });
   }
@@ -505,9 +542,21 @@
   }
   function escapeAttr(s) { return escapeHtml(s).replace(/"/g, '&quot;'); }
 
+  function autogrow() {
+    input.style.height = 'auto';
+    input.style.height = Math.min(input.scrollHeight, 120) + 'px';
+  }
+
   $('#composer').addEventListener('submit', function (e) {
     e.preventDefault();
     sendMessage(input.value.trim());
+  });
+  input.addEventListener('input', autogrow);
+  input.addEventListener('keydown', function (e) {
+    if (e.key === 'Enter' && !e.shiftKey && !coarsePointer && !e.isComposing) {
+      e.preventDefault();
+      sendMessage(input.value.trim());
+    }
   });
 
   messages.addEventListener('click', function (e) {

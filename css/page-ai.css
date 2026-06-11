@@ -72,6 +72,12 @@ body {
 }
 button, input, textarea { font: inherit; }
 button { cursor: pointer; }
+button:focus-visible, a:focus-visible, label:focus-visible {
+  outline: 2px solid var(--violet);
+  outline-offset: 2px;
+}
+input:focus-visible, textarea:focus-visible { outline: none; }
+button:disabled { cursor: default; }
 .login-btn, .quota-pill {
   height: 32px;
   display: inline-grid;
@@ -188,6 +194,7 @@ button { cursor: pointer; }
 }
 
 .chat-canvas {
+  position: relative;
   flex: 1 1 auto;
   display: grid;
   grid-template-rows: minmax(0, 1fr);
@@ -251,6 +258,36 @@ button { cursor: pointer; }
   box-shadow: none;
   color: var(--muted);
   font-size: 13px;
+}
+.msg.is-typing { min-height: 22px; }
+.msg.is-typing::after {
+  content: "";
+  display: inline-block;
+  width: 30px;
+  height: 7px;
+  background:
+    radial-gradient(circle 3px at 4px 50%, var(--muted) 95%, transparent),
+    radial-gradient(circle 3px at 15px 50%, var(--muted) 95%, transparent),
+    radial-gradient(circle 3px at 26px 50%, var(--muted) 95%, transparent);
+  animation: typingFade 1s ease-in-out infinite;
+}
+@keyframes typingFade {
+  50% { opacity: .3; }
+}
+.jump-latest {
+  position: absolute;
+  left: 50%;
+  bottom: 14px;
+  transform: translateX(-50%);
+  z-index: 8;
+  min-height: 32px;
+  padding: 0 14px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: #fff;
+  color: var(--muted);
+  font-size: 13px;
+  box-shadow: 0 8px 24px rgba(60, 48, 30, .12);
 }
 
 .action-card {
@@ -535,6 +572,9 @@ input:focus, textarea:focus { border-color: var(--violet); }
   background: var(--violet);
   color: #fff;
 }
+.composer button:disabled {
+  opacity: .45;
+}
 
 @media (max-width: 760px) {
   .desktop-canvas {
@@ -591,10 +631,9 @@ input:focus, textarea:focus { border-color: var(--violet); }
     padding: 10px 14px;
   }
   .my-page-item {
-    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-columns: minmax(0, 1fr) auto auto;
   }
   .my-page-badge { display: none; }
-  .my-page-item a { display: none; }
   .chat-canvas {
     min-height: 0;
     padding: 18px 12px 10px;
