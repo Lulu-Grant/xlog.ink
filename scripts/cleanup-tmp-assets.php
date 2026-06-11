@@ -11,3 +11,13 @@ foreach (glob($base . '/*') ?: [] as $dir) {
     @rmdir($dir);
     echo "Removed {$dir}\n";
 }
+
+$previewBase = dirname(__DIR__) . '/data/previews';
+if (!is_dir($previewBase)) {
+    exit;
+}
+foreach (glob($previewBase . '/*.html') ?: [] as $file) {
+    if (!is_file($file) || filemtime($file) > $cutoff) continue;
+    @unlink($file);
+    echo "Removed {$file}\n";
+}

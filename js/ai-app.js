@@ -6,6 +6,8 @@
     user: null,
     readyShown: false,
     publishCard: null,
+    previewCard: null,
+    previewTimer: null,
   };
 
   var $ = function (s) { return document.querySelector(s); };
@@ -96,6 +98,48 @@
       sitekey: sitekey,
       theme: 'light'
     });
+  }
+
+  function showLivePreview(url, refreshMs) {
+    if (!url) return;
+    if (!state.previewCard || !document.body.contains(state.previewCard)) {
+      state.previewCard = addActionCard('live-preview-card',
+        '<div class="live-preview-head">' +
+        '<div><span class="live-dot"></span><strong>Live HTML Stream</strong></div>' +
+        '<span class="live-preview-status">正在接收页面碎片</span>' +
+        '</div>' +
+        '<iframe class="live-preview-frame" title="生成中页面预览" sandbox="" referrerpolicy="no-referrer"></iframe>' +
+        '<div class="live-preview-note">预览每秒刷新一次，生成中可能残缺、错位或只有半个页面。</div>');
+    }
+    var iframe = state.previewCard.querySelector('.live-preview-frame');
+    iframe.dataset.previewUrl = url;
+    iframe.src = previewUrlWithTick(url);
+    if (state.previewTimer) clearInterval(state.previewTimer);
+    state.previewTimer = setInterval(function () {
+      if (!state.previewCard || !document.body.contains(state.previewCard)) {
+        stopLivePreview('');
+        return;
+      }
+      iframe.src = previewUrlWithTick(iframe.dataset.previewUrl || url);
+    }, refreshMs || 1000);
+    messages.scrollTop = messages.scrollHeight;
+  }
+
+  function updateLivePreviewStatus(text) {
+    if (!state.previewCard) return;
+    var status = state.previewCard.querySelector('.live-preview-status');
+    if (status) status.textContent = text;
+  }
+
+  function stopLivePreview(text) {
+    if (state.previewTimer) clearInterval(state.previewTimer);
+    state.previewTimer = null;
+    if (text) updateLivePreviewStatus(text);
+    if (state.previewCard) state.previewCard.classList.add('is-stopped');
+  }
+
+  function previewUrlWithTick(url) {
+    return url + (url.indexOf('?') === -1 ? '?' : '&') + 't=' + Date.now();
   }
 
   function maybeShowUploadCard(text) {
@@ -271,23 +315,31 @@
       return readSse(r, {
         stage: function (d) {
           progress.textContent = d.stage === 'writing' ? '正在写入页面文件...' : (d.stage === 'done' ? '页面写入完成。' : '阶段：' + d.stage);
+          if (d.stage === 'writing') updateLivePreviewStatus('正在写入最终页面');
+          else if (d.stage === 'done') stopLivePreview('最终页面已写入');
+        },
+        preview: function (d) {
+          showLivePreview(d.url, d.refresh_ms || 1000);
         },
         delta: function (d) {
           generatedChars += (d.text || '').length;
           var now = Date.now();
           if (now - lastProgressAt > 800) {
             progress.textContent = 'AI 正在生成页面，已接收约 ' + generatedChars + ' 字符...';
+            updateLivePreviewStatus('已接收约 ' + generatedChars + ' 字符');
             lastProgressAt = now;
           }
         },
         error: function (d) {
           publishTerminal = true;
+          stopLivePreview('生成失败，预览已停止');
           addMessage('system', d.message || '生成失败');
           if (window.turnstile) window.turnstile.reset();
         },
         result: function (d) {
           publishTerminal = true;
           state.lastUrl = d.url;
+          stopLivePreview('生成完成，预览冻结');
           addMessage('assistant', '你的页面已上线。要不要留个邮箱？以后可以用邮件里的链接修改这个页面。');
           renderDelivery(d.url);
           api('/api/auth/me.php', {}).then(function (me) { setUser(me.user); setQuota(me.quota); }).catch(function () {});
@@ -295,8 +347,12 @@
         }
       });
     }).then(function () {
-      if (!publishTerminal) addMessage('system', '生成连接已结束但没有收到页面地址。请再点一次生成；如果重复出现，说明模型输出超时。');
+      if (!publishTerminal) {
+        stopLivePreview('连接结束，未收到最终页面');
+        addMessage('system', '生成连接已结束但没有收到页面地址。请再点一次生成；如果重复出现，说明模型输出超时。');
+      }
     }).catch(function () {
+      stopLivePreview('生成连接中断');
       addMessage('system', '生成连接中断。请稍后重试，或减少页面内容后再生成。');
       if (window.turnstile) window.turnstile.reset();
     }).finally(function () {

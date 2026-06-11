@@ -30,6 +30,11 @@ try {
     }
 
     sse_event('stage', ['stage' => 'generating']);
+    write_live_preview($sessionId, '');
+    sse_event('preview', [
+        'url' => '/api/preview.php?session_id=' . rawurlencode($sessionId),
+        'refresh_ms' => 1000,
+    ]);
     $messages = session_messages($sessionId) ?: [];
     $images = session_images_context($sessionId);
     $system = prompt_text('gen-system.txt');
@@ -39,10 +44,17 @@ try {
         ['role' => 'user', 'content' => "下面是完整对话历史 JSON，请生成最终页面。\n" . json_encode($messages, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) . "\n\n" . $context],
     ];
     $raw = '';
-    $usage = ai_stream_generate($modelMessages, function ($delta) use (&$raw) {
+    $lastPreviewWrite = 0.0;
+    $usage = ai_stream_generate($modelMessages, function ($delta) use (&$raw, &$lastPreviewWrite, $sessionId) {
         $raw .= $delta;
         sse_event('delta', ['text' => mb_substr($delta, 0, 160, 'UTF-8')]);
+        $now = microtime(true);
+        if ($now - $lastPreviewWrite >= 0.8) {
+            write_live_preview($sessionId, $raw);
+            $lastPreviewWrite = $now;
+        }
     });
+    write_live_preview($sessionId, $raw);
 
     if (strpos($raw, '<!-- REFUSED:') !== false) {
         record_publish_event($sessionId, $session['page_slug'] ?: null, 'generate', 'refused', 'AI refused the request', $usage);
@@ -60,6 +72,7 @@ try {
     }
     $html = inject_generated_csp($html);
     $html = inject_generated_footer($html);
+    write_live_preview($sessionId, $html);
 
     $quota = consume_quota('generate');
     if (!$quota['ok']) {
@@ -117,6 +130,52 @@ function extract_html_document($raw) {
         throw new RuntimeException('AI did not return a complete HTML document');
     }
     return trim($raw);
+}
+
+function live_preview_path($sessionId) {
+    if (!preg_match('/^[a-f0-9]{32}$/', $sessionId)) {
+        throw new RuntimeException('Invalid preview session');
+    }
+    $dir = xlog_config('data_dir') . '/previews';
+    if (!is_dir($dir)) @mkdir($dir, 0755, true);
+    return $dir . '/' . $sessionId . '.html';
+}
+
+function write_live_preview($sessionId, $raw) {
+    try {
+        file_put_contents(live_preview_path($sessionId), live_preview_document($raw), LOCK_EX);
+    } catch (Throwable $e) {
+        error_log('live preview write failed: ' . $e->getMessage());
+    }
+}
+
+function live_preview_document($raw) {
+    $clean = preg_replace('/^\s*```(?:html)?\s*/i', '', (string)$raw);
+    $clean = preg_replace('/```\s*$/', '', $clean);
+    $clean = trim($clean);
+    $pos = stripos($clean, '<!DOCTYPE html');
+    if ($pos === false) $pos = stripos($clean, '<html');
+    if ($pos !== false) {
+        $clean = substr($clean, $pos);
+    }
+    if ($clean === '' || strpos($clean, '<') === false) {
+        $escaped = h($clean === '' ? '等待模型开始输出 HTML...' : $clean);
+        return <<<HTML
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <style>
+    *{box-sizing:border-box}body{margin:0;min-height:100vh;display:grid;place-items:center;background:#0b0c10;color:#b6ffe7;font:14px/1.7 ui-monospace,SFMono-Regular,Menlo,monospace;padding:24px}
+    pre{max-width:78ch;white-space:pre-wrap;opacity:.86}
+  </style>
+</head>
+<body><pre>{$escaped}</pre></body>
+</html>
+HTML;
+    }
+    return $clean . "\n<!-- xlog live preview: partial html stream -->";
 }
 
 function validate_generated_html($html) {
