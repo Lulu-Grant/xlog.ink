@@ -8,6 +8,7 @@
     publishCard: null,
     previewCard: null,
     previewTimer: null,
+    awaitingEmail: false,
   };
 
   var $ = function (s) { return document.querySelector(s); };
@@ -177,8 +178,6 @@
         '<button type="button" data-download-qr="1">下载二维码</button>' +
         '<a data-open-page="1" href="#" target="_blank" rel="noopener">打开页面</a>' +
         '</div>' +
-        '</div>' +
-        '<div class="email-row"><input class="owner-email" type="email" placeholder="输入邮箱，获得后续修改链接"><button type="button" data-bind-email="1">发送修改链接</button></div>' +
         '</div>');
     }
     scrollDown(false);
@@ -417,6 +416,25 @@
       messages.classList.remove('is-hero');
       input.placeholder = '继续描述你的页面...';
     }
+    if (state.awaitingEmail) {
+      var contextualEmail = extractEmail(text);
+      var skipEmailIntent = /(不(用|要|留|绑定)|暂不|跳过|算了|不用了|不要了)/.test(text);
+      if (contextualEmail || skipEmailIntent) {
+        setBusy(true);
+        addMessage('user', text);
+        input.value = '';
+        autogrow();
+        if (contextualEmail) {
+          bindEmail(document.querySelector('.email-card[data-active="1"]'), contextualEmail).finally(function () {
+            setBusy(false);
+          });
+        } else {
+          skipEmailBinding(document.querySelector('.email-card[data-active="1"]'));
+          setBusy(false);
+        }
+        return;
+      }
+    }
     var publishIntent = /(直接)?(生成|发布|上线|创建页面|开始生成|开始做)/.test(text);
     setBusy(true);
     addMessage('user', text);
@@ -510,8 +528,9 @@
         result: function (d) {
           publishTerminal = true;
           state.lastUrl = d.url;
-          addMessage('assistant', '你的页面已上线。要不要留个邮箱？以后可以用邮件里的链接修改这个页面。');
           finalizeLivePreview(d.url);
+          addMessage('assistant', '你的页面已上线。要不要留个邮箱？以后可以用邮件里的链接修改这个页面。');
+          showEmailCard();
           api('/api/auth/me.php', {}).then(function (me) { setUser(me.user); setQuota(me.quota); }).catch(function () {});
           if (window.turnstile) window.turnstile.reset();
         }
@@ -536,26 +555,53 @@
   }
 
   function showEmailCard() {
-    var delivery = document.querySelector('.delivery-card');
-    if (delivery) {
-      var existing = delivery.querySelector('.owner-email');
-      if (existing) existing.focus();
+    var existingCard = document.querySelector('.email-card[data-active="1"]');
+    if (existingCard) {
+      var existingInput = existingCard.querySelector('.owner-email');
+      if (existingInput) existingInput.focus();
       return;
     }
-    addActionCard('delivery-card email-card',
+    var card = addActionCard('email-card',
       '<div class="action-title">留下邮箱，获得后续修改链接</div>' +
-      '<p>页面发布后可以把修改入口发送到你的邮箱。</p>' +
-      '<div class="email-row"><input class="owner-email" type="email" placeholder="输入邮箱"><button type="button" data-bind-email="1">发送修改链接</button></div>');
+      '<p>如果你希望以后能修改这个页面，在这里填写邮箱。我们会发送一个带鉴权 token 的修改链接；不填写则页面不可修改。</p>' +
+      '<div class="email-row"><input class="owner-email" type="email" placeholder="your@email.com"><button type="button" data-bind-email="1">发送修改链接</button></div>' +
+      '<div class="inline-actions"><button type="button" class="ghost-btn" data-skip-email="1">暂不绑定</button></div>');
+    card.dataset.active = '1';
+    state.awaitingEmail = true;
   }
 
-  function bindEmail(card) {
+  function bindEmail(card, explicitEmail) {
     var emailInput = card ? card.querySelector('.owner-email') : null;
-    var email = emailInput ? emailInput.value.trim() : '';
-    if (!email) return;
-    api('/api/page-email.php', { session_id: state.sessionId, email: email }).then(function (r) {
-      if (r.error) addMessage('system', r.error.message);
-      else addMessage('assistant', '修改链接已经发送到 ' + email + '。');
+    var email = explicitEmail || (emailInput ? emailInput.value.trim() : '');
+    if (!email) return Promise.resolve(false);
+    if (!extractEmail(email) || extractEmail(email) !== email) {
+      addMessage('system', '请在邮箱卡片里填写有效邮箱。');
+      return Promise.resolve(false);
+    }
+    if (emailInput) emailInput.value = email;
+    return api('/api/page-email.php', { session_id: state.sessionId, email: email }).then(function (r) {
+      if (r.error) {
+        addMessage('system', r.error.message);
+        return false;
+      }
+      completeEmailCard(card);
+      addMessage('assistant', '修改链接已经发送到 ' + email + '，以后可以用邮件里的链接回来修改这个页面。');
+      return true;
+    }).catch(function () {
+      addMessage('system', '修改链接发送失败，请稍后再试。');
+      return false;
     });
+  }
+
+  function completeEmailCard(card) {
+    disableCard(card);
+    if (card) card.dataset.active = '0';
+    state.awaitingEmail = false;
+  }
+
+  function skipEmailBinding(card) {
+    completeEmailCard(card);
+    addMessage('system', '已跳过邮箱绑定。这个页面将无法通过邮件链接修改。');
   }
 
   function toggleMyPages(open) {
@@ -660,6 +706,10 @@
     return String(s).replace(/[&<>"']/g, function (c) { return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]; });
   }
   function escapeAttr(s) { return escapeHtml(s).replace(/"/g, '&quot;'); }
+  function extractEmail(text) {
+    var match = String(text || '').match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i);
+    return match ? match[0] : '';
+  }
 
   function autogrow() {
     input.style.height = 'auto';
@@ -711,6 +761,16 @@
       addMessage('system', '可以继续补充需求，准备好后再说“生成页面”。');
       return;
     }
+    var bindEmailBtn = e.target.closest('button[data-bind-email]');
+    if (bindEmailBtn) {
+      bindEmail(bindEmailBtn.closest('.email-card'));
+      return;
+    }
+    var skipEmail = e.target.closest('button[data-skip-email]');
+    if (skipEmail) {
+      skipEmailBinding(skipEmail.closest('.email-card'));
+      return;
+    }
     var delivery = e.target.closest('.delivery-card');
     if (!delivery) return;
     var url = delivery.dataset.pageUrl || state.lastUrl;
@@ -733,9 +793,6 @@
       a.href = canvas.toDataURL('image/png');
       a.click();
       return;
-    }
-    if (e.target.closest('button[data-bind-email]')) {
-      bindEmail(delivery);
     }
   });
   $('#loginToggle').addEventListener('click', function () {
