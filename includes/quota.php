@@ -76,9 +76,24 @@ function quota_status($kind = 'generate') {
     ];
 }
 
+function quota_begin_immediate(PDO $pdo) {
+    $pdo->exec('BEGIN IMMEDIATE');
+}
+
+function quota_commit(PDO $pdo) {
+    $pdo->exec('COMMIT');
+}
+
+function quota_rollback(PDO $pdo) {
+    try {
+        $pdo->exec('ROLLBACK');
+    } catch (Throwable $ignored) {
+    }
+}
+
 function consume_quota($kind = 'generate') {
     $pdo = db();
-    $pdo->exec('BEGIN IMMEDIATE');
+    quota_begin_immediate($pdo);
     try {
         $userId = current_user_id();
         if ($kind === 'generate' && xlog_config('billing.credit_mode', false) && $userId) {
@@ -86,7 +101,7 @@ function consume_quota($kind = 'generate') {
             $row = db_one('SELECT credits FROM users WHERE id = ? AND status = ?', [$userId, 'active']);
             $credits = $row ? (int)$row['credits'] : 0;
             if ($credits < $cost) {
-                $pdo->commit();
+                quota_commit($pdo);
                 return ['ok' => false, 'remaining' => 0, 'identity' => 'user', 'reason' => 'credits_exhausted', 'kind' => $kind];
             }
             db_exec('UPDATE users SET credits = credits - ? WHERE id = ?', [$cost, $userId]);
@@ -94,7 +109,7 @@ function consume_quota($kind = 'generate') {
                 'INSERT INTO credit_transactions (user_id, delta, reason, ref, created_at) VALUES (?, ?, ?, ?, ?)',
                 [$userId, -$cost, 'generate', null, now_iso()]
             );
-            $pdo->commit();
+            quota_commit($pdo);
             return [
                 'ok' => true,
                 'remaining' => intdiv($credits - $cost, $cost),
@@ -111,11 +126,11 @@ function consume_quota($kind = 'generate') {
             $limit = quota_limit_for($kind, $userId);
             $used = quota_count($key, $kind);
             if ($used >= $limit) {
-                $pdo->commit();
+                quota_commit($pdo);
                 return ['ok' => false, 'remaining' => 0, 'identity' => 'user', 'reason' => 'daily_quota_exceeded', 'kind' => $kind];
             }
             quota_increment($key, $kind);
-            $pdo->commit();
+            quota_commit($pdo);
             return [
                 'ok' => true,
                 'remaining' => $limit - $used - 1,
@@ -130,13 +145,13 @@ function consume_quota($kind = 'generate') {
         $keys = ['ip:' . client_ip(), 'cookie:' . xlog_cookie_id()];
         foreach ($keys as $key) {
             if (quota_count($key, $kind) >= $limit) {
-                $pdo->commit();
+                quota_commit($pdo);
                 return ['ok' => false, 'remaining' => 0, 'identity' => 'guest', 'reason' => 'daily_quota_exceeded', 'kind' => $kind];
             }
         }
         foreach ($keys as $key) quota_increment($key, $kind);
         $remaining = $limit - max(quota_count($keys[0], $kind), quota_count($keys[1], $kind));
-        $pdo->commit();
+        quota_commit($pdo);
         return [
             'ok' => true,
             'remaining' => max(0, $remaining),
@@ -146,7 +161,7 @@ function consume_quota($kind = 'generate') {
             'keys' => $keys,
         ];
     } catch (Throwable $e) {
-        if ($pdo->inTransaction()) $pdo->rollBack();
+        quota_rollback($pdo);
         throw $e;
     }
 }
@@ -154,7 +169,7 @@ function consume_quota($kind = 'generate') {
 function refund_quota($kind, array $charge) {
     if (empty($charge['ok']) || ($charge['kind'] ?? $kind) !== $kind) return;
     $pdo = db();
-    $pdo->exec('BEGIN IMMEDIATE');
+    quota_begin_immediate($pdo);
     try {
         if (!empty($charge['credit_mode']) && !empty($charge['user_id'])) {
             $cost = max(1, (int)($charge['cost'] ?? xlog_config('billing.generate_credit_cost', 1)));
@@ -168,9 +183,9 @@ function refund_quota($kind, array $charge) {
                 quota_decrement($key, $kind);
             }
         }
-        $pdo->commit();
+        quota_commit($pdo);
     } catch (Throwable $e) {
-        if ($pdo->inTransaction()) $pdo->rollBack();
+        quota_rollback($pdo);
         throw $e;
     }
 }
