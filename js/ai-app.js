@@ -155,6 +155,8 @@
   function publish() {
     if (!state.sessionId || state.busy) return;
     state.busy = true;
+    state.lastUrl = '';
+    var publishTerminal = false;
     addMessage('system', '开始生成页面，请保持当前窗口打开。');
     var turnstileToken = '';
     if (document.body.dataset.turnstileEnabled === '1' && window.turnstile) {
@@ -175,13 +177,28 @@
         is_adult: !!($('#isAdultPage') && $('#isAdultPage').checked)
       })
     }).then(function (r) {
+      var generatedChars = 0;
+      var lastProgressAt = 0;
+      var progress = addMessage('system', 'AI 正在生成页面结构与样式...');
       return readSse(r, {
-        stage: function (d) { addMessage('system', '阶段：' + d.stage); },
+        stage: function (d) {
+          progress.textContent = d.stage === 'writing' ? '正在写入页面文件...' : (d.stage === 'done' ? '页面写入完成。' : '阶段：' + d.stage);
+        },
+        delta: function (d) {
+          generatedChars += (d.text || '').length;
+          var now = Date.now();
+          if (now - lastProgressAt > 800) {
+            progress.textContent = 'AI 正在生成页面，已接收约 ' + generatedChars + ' 字符...';
+            lastProgressAt = now;
+          }
+        },
         error: function (d) {
+          publishTerminal = true;
           addMessage('system', d.message || '生成失败');
           if (window.turnstile) window.turnstile.reset();
         },
         result: function (d) {
+          publishTerminal = true;
           state.lastUrl = d.url;
           addMessage('assistant', '你的页面已上线：\n' + d.url + '\n\n要不要留个邮箱？以后可以用邮件里的链接修改这个页面。');
           renderDelivery(d.url);
@@ -189,6 +206,11 @@
           if (window.turnstile) window.turnstile.reset();
         }
       });
+    }).then(function () {
+      if (!publishTerminal) addMessage('system', '生成连接已结束但没有收到页面地址。请再点一次生成；如果重复出现，说明模型输出超时。');
+    }).catch(function () {
+      addMessage('system', '生成连接中断。请稍后重试，或减少页面内容后再生成。');
+      if (window.turnstile) window.turnstile.reset();
     }).finally(function () { state.busy = false; });
   }
 

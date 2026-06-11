@@ -4,6 +4,9 @@ require_once __DIR__ . '/../includes/imageproc.php';
 require_once __DIR__ . '/../includes/recent.php';
 require_once __DIR__ . '/../includes/turnstile.php';
 
+@set_time_limit(300);
+@ini_set('max_execution_time', '300');
+
 require_method('POST');
 $data = json_input();
 $sessionId = trim($data['session_id'] ?? '');

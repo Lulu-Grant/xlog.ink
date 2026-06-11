@@ -107,7 +107,7 @@ function ai_curl_sse($url, array $headers, array $payload, callable $onData) {
         CURLOPT_HTTPHEADER => $headers,
         CURLOPT_POSTFIELDS => json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
         CURLOPT_RETURNTRANSFER => false,
-        CURLOPT_TIMEOUT => 180,
+        CURLOPT_TIMEOUT => 260,
         CURLOPT_CONNECTTIMEOUT => 20,
         CURLOPT_WRITEFUNCTION => function ($ch, $chunk) use (&$buffer, &$usage, $onData) {
             $buffer .= $chunk;
