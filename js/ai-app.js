@@ -416,6 +416,7 @@
       messages.classList.remove('is-hero');
       input.placeholder = '继续描述你的页面...';
     }
+    var publishIntent = /(直接)?(重新)?(生成|发布|上线|创建页面|开始生成|开始做)/.test(text);
     if (state.awaitingEmail) {
       var contextualEmail = extractEmail(text);
       var skipEmailIntent = /(不(用|要|留|绑定)|暂不|跳过|算了|不用了|不要了)/.test(text);
@@ -434,8 +435,11 @@
         }
         return;
       }
+      if (publishIntent) {
+        completeEmailCard(document.querySelector('.email-card[data-active="1"]'));
+        addMessage('system', '已关闭上一页的邮箱绑定入口，继续准备新的生成。');
+      }
     }
-    var publishIntent = /(直接)?(生成|发布|上线|创建页面|开始生成|开始做)/.test(text);
     setBusy(true);
     addMessage('user', text);
     input.value = '';
@@ -521,6 +525,7 @@
         },
         error: function (d) {
           publishTerminal = true;
+          state.readyShown = false;
           stopLivePreview('生成失败，预览已停止');
           addMessage('system', d.message || '生成失败');
           if (window.turnstile) window.turnstile.reset();
@@ -528,6 +533,8 @@
         result: function (d) {
           publishTerminal = true;
           state.lastUrl = d.url;
+          state.readyShown = false;
+          state.publishCard = null;
           finalizeLivePreview(d.url);
           addMessage('assistant', '你的页面已上线。要不要留个邮箱？以后可以用邮件里的链接修改这个页面。');
           showEmailCard();
@@ -541,6 +548,7 @@
         addMessage('system', '生成连接已结束但没有收到页面地址。请再点一次生成；如果重复出现，说明模型输出超时。');
       }
     }).catch(function () {
+      state.readyShown = false;
       stopLivePreview('生成连接中断');
       addMessage('system', '生成连接中断。请稍后重试，或减少页面内容后再生成。');
       if (window.turnstile) window.turnstile.reset();

@@ -74,6 +74,6 @@ $turnstileSiteKey = xlog_config('turnstile.site_key', '');
 
   </main>
   <script src="/js/qrcode.min.js?v=1.4.4"></script>
-  <script src="/js/ai-app.js?v=20260612v21"></script>
+  <script src="/js/ai-app.js?v=20260612v22"></script>
 </body>
 </html>

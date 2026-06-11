@@ -19,6 +19,7 @@ if (!current_user_id()) xlog_cookie_id();
 sse_start();
 $quotaCharge = null;
 $editPage = null;
+$editMode = $session['edit_mode'] ?? '';
 try {
     if (!api_turnstile_ok($data['turnstile_token'] ?? '')) {
         record_publish_event($sessionId, null, 'generate', 'failed', 'turnstile_failed');
@@ -26,14 +27,13 @@ try {
         exit;
     }
 
-    if (!empty($session['page_slug'])) {
+    if (!empty($session['page_slug']) && in_array($editMode, ['edit_owner', 'edit_token'], true)) {
         $editPage = db_one('SELECT * FROM pages WHERE slug = ? AND status = ?', [$session['page_slug'], 'live']);
         if (!$editPage) {
             record_publish_event($sessionId, $session['page_slug'], 'generate', 'failed', 'edit_page_not_found');
             sse_event('error', ['code' => 'edit_page_not_found', 'message' => '要修改的页面不存在或已下线。']);
             exit;
         }
-        $editMode = $session['edit_mode'] ?? '';
         if ($editMode === 'edit_owner') {
             if (!current_user_can_edit_page($editPage)) {
                 record_publish_event($sessionId, $session['page_slug'], 'generate', 'failed', 'forbidden_edit_session');
@@ -46,11 +46,11 @@ try {
                 sse_event('error', ['code' => 'forbidden_edit_session', 'message' => '这个页面当前不可通过邮件链接修改。']);
                 exit;
             }
-        } else {
-            record_publish_event($sessionId, $session['page_slug'], 'generate', 'failed', 'invalid_edit_session');
-            sse_event('error', ['code' => 'invalid_edit_session', 'message' => '编辑会话无效，请重新进入修改链接。']);
-            exit;
         }
+    } elseif (!empty($editMode)) {
+        record_publish_event($sessionId, $session['page_slug'] ?: null, 'generate', 'failed', 'invalid_edit_session');
+        sse_event('error', ['code' => 'invalid_edit_session', 'message' => '编辑会话无效，请重新进入修改链接。']);
+        exit;
     }
 
     $quotaCharge = consume_quota('generate');
@@ -96,7 +96,7 @@ try {
 
     $html = extract_html_document($raw);
     validate_generated_html($html);
-    $pageSlug = $session['page_slug'] ?: generate_unique_slug();
+    $pageSlug = $editPage ? $session['page_slug'] : generate_unique_slug();
     $html = move_session_assets_to_slug($sessionId, $pageSlug, $html);
     $isAdult = ($editPage && !empty($editPage['is_adult'])) || !empty($data['is_adult']) || conversation_indicates_adult($messages);
     if ($isAdult) {
