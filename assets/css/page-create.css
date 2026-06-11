@@ -1,0 +1,72 @@
+/* ---------- Create pages ---------- */
+.editor-frame {
+  background: var(--bg-surface);
+}
+.form-stack {
+  padding: 0;
+}
+.form-intro-note {
+  margin: 0;
+  padding: 0 0 14px;
+  border-bottom: 1px solid color-mix(in srgb, var(--border-subtle), transparent 18%);
+}
+.form-block {
+  margin-top: 0;
+  padding: 18px 0;
+  border: 0;
+  border-top: 1px solid color-mix(in srgb, var(--border-subtle), transparent 18%);
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+.form-block:first-of-type {
+  border-top: 0;
+  padding-top: 14px;
+}
+.form-block h2 {
+  margin: 0 0 10px;
+}
+.form-block .text-help {
+  max-width: 44rem;
+}
+.form-block-emphasis {
+  margin-top: 10px;
+  padding: 16px;
+  border: 1px solid color-mix(in srgb, var(--border-strong), transparent 8%);
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--bg-surface), var(--bg-surface-2) 20%);
+}
+.form-actions-shell {
+  margin-top: 8px;
+  padding: 14px 0 6px;
+  border-top: 1px solid color-mix(in srgb, var(--border-subtle), transparent 18%);
+}
+.form-actions-shell .action-group {
+  margin-top: 12px;
+}
+.form-actions-shell .form-block {
+  padding-top: 14px;
+  padding-bottom: 10px;
+}
+.form-actions-shell .form-block:first-of-type {
+  border-top: 0;
+  padding-top: 0;
+}
+.editor-frame .link-item {
+  padding: 12px 0;
+  border-top: 1px solid color-mix(in srgb, var(--border), transparent 20%);
+}
+.editor-frame .link-item:first-child {
+  border-top: 0;
+  padding-top: 4px;
+}
+.editor-frame .link-actions {
+  margin-top: 8px;
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.ui-card--switcher {
+  padding: 14px 18px;
+}

@@ -1,0 +1,31 @@
+.DS_Store
+*.log
+*.tmp
+
+# Local agent/editor state
+.claude/
+.idea/
+.vscode/
+
+# Runtime data
+data/*.db
+data/*.db-*
+data/mail.log
+data/*.log
+ratelimit/*.json
+data/ratelimit/
+127.0.0.1.json
+
+# Generated pages and uploaded assets
+site/*
+!site/.gitkeep
+site-assets/*
+!site-assets/.gitkeep
+
+# Local previews and nested legacy copy
+tmp-preview/
+xlog.ink/
+
+# Secrets must live outside webroot
+config.php
+.env
