@@ -226,7 +226,13 @@
       if (window.matchMedia('(max-width: 760px)').matches) myPages.textContent = '页面';
       else myPages.textContent = '我的页面';
     }
-    if (login) login.textContent = state.user ? '已登录' : '登录';
+    if (login) {
+      login.textContent = state.user ? (state.user.email || '账号').split('@')[0] : '登录';
+    }
+    $('#loginStepEmail').hidden = !!state.user;
+    $('#loginStepCode').hidden = true;
+    $('#accountRow').hidden = !state.user;
+    if (state.user) $('#accountEmail').textContent = state.user.email || '';
   }
 
   function api(path, body) {
@@ -249,6 +255,8 @@
     api('/api/session.php', {}).then(function (data) {
       state.sessionId = data.session_id;
       setQuota(data.quota);
+      messages.classList.add('is-hero');
+      input.placeholder = '一句话描述你想要的页面…';
       addMessage('assistant', data.greeting);
       renderPresetCard();
     }).catch(function () {
@@ -285,6 +293,10 @@
 
   function sendMessage(text) {
     if (!text || state.busy) return;
+    if (messages.classList.contains('is-hero')) {
+      messages.classList.remove('is-hero');
+      input.placeholder = '继续描述你的页面...';
+    }
     var publishIntent = /(直接)?(生成|发布|上线|创建页面|开始生成|开始做)/.test(text);
     setBusy(true);
     addMessage('user', text);
@@ -623,20 +635,72 @@
     var btn = e.target.closest('button[data-edit-slug]');
     if (btn) enterOwnerEdit(btn.dataset.editSlug);
   });
+  function loginHint(text) {
+    var el = $('#loginHint');
+    if (!text) { el.hidden = true; return; }
+    el.textContent = text;
+    el.hidden = false;
+  }
+
+  var codeTimer = null;
+  function startCodeCountdown(seconds) {
+    var btn = $('#sendCodeBtn');
+    var left = seconds;
+    btn.disabled = true;
+    btn.textContent = '重发 ' + left + 's';
+    clearInterval(codeTimer);
+    codeTimer = setInterval(function () {
+      left -= 1;
+      if (left <= 0) {
+        clearInterval(codeTimer);
+        btn.disabled = false;
+        btn.textContent = '重新发送';
+        return;
+      }
+      btn.textContent = '重发 ' + left + 's';
+    }, 1000);
+  }
+
   $('#sendCodeBtn').addEventListener('click', function () {
-    api('/api/auth/send-code.php', { email: $('#loginEmail').value.trim() }).then(function (r) {
-      addMessage('system', r.error ? r.error.message : '验证码已发送。');
+    var email = $('#loginEmail').value.trim();
+    if (!email) { loginHint('请先输入邮箱。'); return; }
+    var btn = this;
+    btn.disabled = true;
+    api('/api/auth/send-code.php', { email: email }).then(function (r) {
+      if (r.error) {
+        btn.disabled = false;
+        loginHint(r.error.message);
+        return;
+      }
+      $('#loginStepCode').hidden = false;
+      $('#loginCode').focus();
+      loginHint('验证码已发送到 ' + email + '，5 分钟内有效。');
+      startCodeCountdown(60);
+    }).catch(function () {
+      btn.disabled = false;
+      loginHint('发送失败，请稍后重试。');
     });
   });
   $('#verifyCodeBtn').addEventListener('click', function () {
     api('/api/auth/verify.php', { email: $('#loginEmail').value.trim(), code: $('#loginCode').value.trim() }).then(function (r) {
-      if (r.error) addMessage('system', r.error.message);
-      else {
-        addMessage('system', '已登录：' + r.user.email);
-        $('#accountBox').hidden = true;
-        api('/api/auth/me.php', {}).then(function (me) { setUser(me.user); setQuota(me.quota); });
-      }
+      if (r.error) { loginHint(r.error.message); return; }
+      loginHint('');
+      $('#loginCode').value = '';
+      api('/api/auth/me.php', {}).then(function (me) { setUser(me.user); setQuota(me.quota); });
     });
+  });
+  $('#logoutBtn').addEventListener('click', function () {
+    api('/api/auth/logout.php', {}).then(function () {
+      loginHint('');
+      $('#accountBox').hidden = true;
+      api('/api/auth/me.php', {}).then(function (me) { setUser(me.user); setQuota(me.quota); }).catch(function () { setUser(null); });
+    });
+  });
+  $('#loginEmail').addEventListener('keydown', function (e) {
+    if (e.key === 'Enter') { e.preventDefault(); $('#sendCodeBtn').click(); }
+  });
+  $('#loginCode').addEventListener('keydown', function (e) {
+    if (e.key === 'Enter') { e.preventDefault(); $('#verifyCodeBtn').click(); }
   });
 
   start();
