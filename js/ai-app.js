@@ -131,18 +131,70 @@
     });
   }
 
-  function showLivePreview(url, refreshMs) {
-    if (!url) return;
+  function buildPreviewPlaceholder() {
+    return '' +
+      '<div class="preview-placeholder" aria-label="页面生成中">' +
+      '<svg class="build-orbit-svg" viewBox="0 0 520 260" role="img" aria-hidden="true">' +
+      '<defs>' +
+      '<linearGradient id="buildGlow" x1="0%" x2="100%" y1="0%" y2="100%"><stop offset="0%" stop-color="#39ffb6"/><stop offset="50%" stop-color="#7c5cff"/><stop offset="100%" stop-color="#ffca6a"/></linearGradient>' +
+      '<filter id="softGlow" x="-40%" y="-40%" width="180%" height="180%"><feGaussianBlur stdDeviation="5" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter>' +
+      '</defs>' +
+      '<rect class="build-grid" x="22" y="18" width="476" height="224" rx="24"/>' +
+      '<path class="build-wire wire-a" d="M82 178 C134 70 246 78 286 128 S396 196 438 82"/>' +
+      '<path class="build-wire wire-b" d="M72 92 C142 152 204 164 260 112 S370 56 452 138"/>' +
+      '<g class="build-core" filter="url(#softGlow)">' +
+      '<circle cx="260" cy="130" r="42"/>' +
+      '<path d="M240 132h40M260 112v40M246 118l28 28M274 118l-28 28"/>' +
+      '</g>' +
+      '<g class="build-node node-a"><circle cx="86" cy="178" r="12"/><path d="M80 178h12"/></g>' +
+      '<g class="build-node node-b"><circle cx="438" cy="82" r="12"/><path d="M432 82h12"/></g>' +
+      '<g class="build-node node-c"><circle cx="452" cy="138" r="10"/><path d="M447 138h10"/></g>' +
+      '<rect class="build-scan" x="42" y="34" width="436" height="36" rx="18"/>' +
+      '</svg>' +
+      '<div class="preview-placeholder-copy">' +
+      '<strong>正在把对话编译成页面</strong>' +
+      '<span>HTML 会一边生成一边流进预览窗。中途看到残缺、闪烁和错位都正常。</span>' +
+      '</div>' +
+      '</div>';
+  }
+
+  function ensureLivePreviewCard() {
     if (!state.previewCard || !document.body.contains(state.previewCard)) {
       state.previewCard = addActionCard('live-preview-card',
         '<div class="live-preview-head">' +
-        '<div><span class="live-dot"></span><strong>Live HTML Stream</strong></div>' +
-        '<span class="live-preview-status">正在接收页面碎片</span>' +
+        '<div><span class="live-dot"></span><strong>Page Forge Stream</strong></div>' +
+        '<span class="live-preview-status">正在启动生成通道</span>' +
         '</div>' +
-        '<iframe class="live-preview-frame" title="生成中页面预览" sandbox="" referrerpolicy="no-referrer"></iframe>' +
-        '<div class="live-preview-note">预览每秒刷新一次，生成中可能残缺、错位或只有半个页面。</div>');
+        buildPreviewPlaceholder() +
+        '<iframe class="live-preview-frame" title="生成中页面预览" sandbox="" referrerpolicy="no-referrer" hidden></iframe>' +
+        '<div class="live-preview-note">预览每秒刷新一次，生成中可能残缺、错位或只有半个页面。</div>' +
+        '<div class="delivery-panel" hidden>' +
+        '<div class="url-box"></div>' +
+        '<div class="delivery-body">' +
+        '<canvas class="qr-canvas" width="180" height="180"></canvas>' +
+        '<div class="delivery-actions">' +
+        '<button type="button" data-copy-url="1">复制链接</button>' +
+        '<button type="button" data-download-qr="1">下载二维码</button>' +
+        '<a data-open-page="1" href="#" target="_blank" rel="noopener">打开页面</a>' +
+        '</div>' +
+        '</div>' +
+        '<div class="email-row"><input class="owner-email" type="email" placeholder="输入邮箱，获得后续修改链接"><button type="button" data-bind-email="1">发送修改链接</button></div>' +
+        '</div>');
     }
+    scrollDown(false);
+    return state.previewCard;
+  }
+
+  function showLivePreview(url, refreshMs) {
+    var card = ensureLivePreviewCard();
+    if (!url) return;
+    card.classList.add('is-previewing');
+    card.classList.remove('is-final');
+    var placeholder = card.querySelector('.preview-placeholder');
+    if (placeholder) placeholder.hidden = true;
     var iframe = state.previewCard.querySelector('.live-preview-frame');
+    iframe.hidden = false;
+    iframe.setAttribute('sandbox', '');
     iframe.dataset.previewUrl = url;
     iframe.src = previewUrlWithTick(url);
     if (state.previewTimer) clearInterval(state.previewTimer);
@@ -153,6 +205,61 @@
       }
       iframe.src = previewUrlWithTick(iframe.dataset.previewUrl || url);
     }, refreshMs || 1000);
+    scrollDown(false);
+  }
+
+  function startGenerationPreview() {
+    if (state.previewCard && state.previewCard.classList.contains('is-final')) {
+      state.previewCard = null;
+    }
+    var card = ensureLivePreviewCard();
+    card.classList.remove('is-final', 'delivery-card', 'is-previewing', 'is-stopped');
+    delete card.dataset.pageUrl;
+    updateLivePreviewStatus('正在启动生成通道');
+    var placeholder = card.querySelector('.preview-placeholder');
+    if (placeholder) placeholder.hidden = false;
+    var iframe = card.querySelector('.live-preview-frame');
+    if (iframe) {
+      iframe.hidden = true;
+      iframe.src = 'about:blank';
+      iframe.removeAttribute('data-preview-url');
+      iframe.setAttribute('sandbox', '');
+    }
+    var note = card.querySelector('.live-preview-note');
+    if (note) note.textContent = '预览每秒刷新一次，生成中可能残缺、错位或只有半个页面。';
+    var panel = card.querySelector('.delivery-panel');
+    if (panel) panel.hidden = true;
+    scrollDown(false);
+  }
+
+  function finalizeLivePreview(url) {
+    if (!url) return;
+    var card = ensureLivePreviewCard();
+    stopLivePreview('页面已上线');
+    state.lastUrl = url;
+    card.classList.add('is-final', 'delivery-card');
+    card.classList.remove('is-previewing', 'is-stopped');
+    card.dataset.pageUrl = url;
+    var placeholder = card.querySelector('.preview-placeholder');
+    if (placeholder) placeholder.hidden = true;
+    var iframe = card.querySelector('.live-preview-frame');
+    iframe.hidden = false;
+    iframe.removeAttribute('data-preview-url');
+    iframe.setAttribute('sandbox', 'allow-scripts allow-same-origin allow-popups');
+    iframe.src = url;
+    var note = card.querySelector('.live-preview-note');
+    if (note) note.textContent = '最终页面已嵌入到对话中。你也可以复制链接、下载二维码或新窗口打开。';
+    var panel = card.querySelector('.delivery-panel');
+    if (panel) panel.hidden = false;
+    var urlBox = card.querySelector('.url-box');
+    if (urlBox) urlBox.textContent = url;
+    var openLink = card.querySelector('[data-open-page]');
+    if (openLink) openLink.href = url;
+    var canvas = card.querySelector('.qr-canvas');
+    if (!drawQr(canvas, url)) {
+      var downloadBtn = card.querySelector('button[data-download-qr]');
+      if (downloadBtn) downloadBtn.hidden = true;
+    }
     scrollDown(false);
   }
 
@@ -346,6 +453,7 @@
     state.lastUrl = '';
     var publishTerminal = false;
     addMessage('system', '开始生成页面，请保持当前窗口打开。');
+    startGenerationPreview();
     var turnstileToken = '';
     if (document.body.dataset.turnstileEnabled === '1') {
       if (options && options.card) renderInlineTurnstile(options.card);
@@ -402,9 +510,8 @@
         result: function (d) {
           publishTerminal = true;
           state.lastUrl = d.url;
-          stopLivePreview('生成完成，预览冻结');
           addMessage('assistant', '你的页面已上线。要不要留个邮箱？以后可以用邮件里的链接修改这个页面。');
-          renderDelivery(d.url);
+          finalizeLivePreview(d.url);
           api('/api/auth/me.php', {}).then(function (me) { setUser(me.user); setQuota(me.quota); }).catch(function () {});
           if (window.turnstile) window.turnstile.reset();
         }
@@ -425,20 +532,7 @@
   }
 
   function renderDelivery(url) {
-    var card = addActionCard('delivery-card',
-      '<div class="url-box">' + escapeHtml(url) + '</div>' +
-      '<canvas class="qr-canvas" width="180" height="180"></canvas>' +
-      '<div class="delivery-actions">' +
-      '<button type="button" data-copy-url="1">复制链接</button>' +
-      '<button type="button" data-download-qr="1">下载二维码</button>' +
-      '<a href="' + escapeAttr(url) + '" target="_blank" rel="noopener">打开页面</a>' +
-      '</div>' +
-      '<div class="email-row"><input class="owner-email" type="email" placeholder="输入邮箱，获得后续修改链接"><button type="button" data-bind-email="1">发送修改链接</button></div>');
-    card.dataset.pageUrl = url;
-    if (!drawQr(card.querySelector('.qr-canvas'), url)) {
-      var downloadBtn = card.querySelector('button[data-download-qr]');
-      if (downloadBtn) downloadBtn.hidden = true;
-    }
+    finalizeLivePreview(url);
   }
 
   function showEmailCard() {
