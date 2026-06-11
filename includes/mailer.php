@@ -37,7 +37,7 @@ function record_mail_event($kind, $key) {
 
 function mail_render_template($template, array $vars) {
     if ($template === 'login-code') {
-        return ['你的 xlog.ink 登录验证码', "验证码：{$vars['code']}\n\n5 分钟内有效。"];
+        return ['xlog.ink 通知', "xlog.ink 登录验证码\n\n验证码：{$vars['code']}\n\n5 分钟内有效。如果不是你本人操作，可以忽略这封邮件。"];
     }
     if ($template === 'edit-link') {
         return ['你的 xlog.ink 页面修改链接', "页面：{$vars['url']}\n\n修改链接：{$vars['edit_url']}\n\n请妥善保存。"];

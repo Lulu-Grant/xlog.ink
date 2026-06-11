@@ -19,5 +19,11 @@ if ($todayCount && (int)$todayCount['c'] >= 10) {
 $code = (string)random_int(100000, 999999);
 $hash = password_hash($code, PASSWORD_DEFAULT);
 db_exec('INSERT INTO login_codes (email, code_hash, expires_at, attempts, created_at) VALUES (?, ?, ?, 0, ?)', [$email, $hash, gmdate('c', time() + 300), now_iso()]);
-send_mail_template($email, 'login-code', ['code' => $code]);
+try {
+    send_mail_template($email, 'login-code', ['code' => $code]);
+    record_mail_event('login-code', $email);
+} catch (Throwable $e) {
+    db_exec('DELETE FROM login_codes WHERE email = ? AND code_hash = ?', [$email, $hash]);
+    api_error('mail_failed', '验证码邮件发送失败，请稍后重试。', 502);
+}
 api_json(['ok' => true]);
