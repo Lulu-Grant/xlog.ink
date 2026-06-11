@@ -93,6 +93,12 @@ function xlog_ensure_dirs() {
 
 function xlog_start_session() {
     if (session_status() === PHP_SESSION_ACTIVE) return;
+    $sessionDir = rtrim(xlog_config('data_dir'), '/') . '/php-sessions';
+    if (!is_dir($sessionDir)) {
+        @mkdir($sessionDir, 0700, true);
+    }
+    @ini_set('session.save_handler', 'files');
+    @ini_set('session.save_path', $sessionDir);
     $secure = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on');
     session_set_cookie_params([
         'lifetime' => 60 * 60 * 24 * 30,
