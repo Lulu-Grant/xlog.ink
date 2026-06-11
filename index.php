@@ -15,7 +15,7 @@ $turnstileSiteKey = xlog_config('turnstile.site_key', '');
   <meta property="og:title" content="xlog.ink - AI 个人页面生成">
   <meta property="og:description" content="聊天、上传图片、生成自由 HTML 页面，并自动分发到二级域名。">
   <meta property="og:image" content="/assets/og/cover.jpg">
-  <link rel="stylesheet" href="/css/page-ai.css?v=20260611v11">
+  <link rel="stylesheet" href="/css/page-ai.css?v=20260611v13">
   <link rel="icon" href="/favicon.ico">
   <?php if ($turnstileEnabled && $turnstileSiteKey !== ''): ?>
   <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
@@ -27,16 +27,9 @@ $turnstileSiteKey = xlog_config('turnstile.site_key', '');
       data-turnstile-sitekey="<?php echo h($turnstileSiteKey); ?>">
   <main class="desktop-canvas">
     <section class="app-window" aria-label="xlog AI page creator">
-      <div class="window-chrome" aria-hidden="true">
-        <span></span><span></span><span></span>
-        <div>xlog.ink</div>
-      </div>
-
       <header class="topbar">
         <a class="brand" id="brandLink" href="/">xlog.ink</a>
         <nav class="top-actions" aria-label="Account and status">
-          <button type="button" class="icon-btn" title="语言">文</button>
-          <button type="button" class="icon-btn" title="主题">◐</button>
           <span id="quotaText" class="quota-pill">读取额度...</span>
           <button id="myPagesToggle" type="button" class="login-btn secondary" hidden>我的页面</button>
           <button id="loginToggle" type="button" class="login-btn">登录</button>
@@ -70,11 +63,8 @@ $turnstileSiteKey = xlog_config('turnstile.site_key', '');
       </form>
     </section>
 
-    <section class="mobile-notes" aria-label="mobile layout note">
-      <span>移动端会保留同一聊天流，顶部状态压缩，交付卡片直接出现在对话下方。</span>
-    </section>
   </main>
   <script src="/js/qrcode.min.js?v=1.4.4"></script>
-  <script src="/js/ai-app.js?v=20260611v12"></script>
+  <script src="/js/ai-app.js?v=20260611v13"></script>
 </body>
 </html>

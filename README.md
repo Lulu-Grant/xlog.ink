@@ -57,6 +57,15 @@ php scripts/build-recent.php
 
 Nginx 参考配置见 `docs/nginx-v2-snippet.conf`。
 
+生产 Nginx 必须屏蔽主域内部目录，至少包含：
+
+```nginx
+location ~ ^/(?:data|includes|prompts|scripts)(?:/|$) { return 404; }
+location ~ /\.(?!well-known) { return 404; }
+```
+
+上线后用 `curl -I` 确认 `/data/xlog.db`、`/includes/bootstrap.php`、`/prompts/chat-system.txt`、`/scripts/cost-report.php` 都返回 404 或 403。
+
 ## 主要接口
 
 - `POST /api/session.php`

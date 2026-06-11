@@ -1,6 +1,7 @@
 <?php
 require_once __DIR__ . '/../includes/ai.php';
 require_once __DIR__ . '/../includes/imageproc.php';
+require_once __DIR__ . '/../includes/page_edit.php';
 require_once __DIR__ . '/../includes/recent.php';
 require_once __DIR__ . '/../includes/turnstile.php';
 
@@ -16,14 +17,44 @@ if (!$session) api_error('session_not_found', 'Session not found', 404);
 if (!current_user_id()) xlog_cookie_id();
 
 sse_start();
+$quotaCharge = null;
+$editPage = null;
 try {
     if (!api_turnstile_ok($data['turnstile_token'] ?? '')) {
         record_publish_event($sessionId, null, 'generate', 'failed', 'turnstile_failed');
         sse_event('error', ['code' => 'turnstile_failed', 'message' => '请完成人机验证后再生成。']);
         exit;
     }
-    $quotaCheck = can_consume_quota('generate');
-    if (!$quotaCheck['ok']) {
+
+    if (!empty($session['page_slug'])) {
+        $editPage = db_one('SELECT * FROM pages WHERE slug = ? AND status = ?', [$session['page_slug'], 'live']);
+        if (!$editPage) {
+            record_publish_event($sessionId, $session['page_slug'], 'generate', 'failed', 'edit_page_not_found');
+            sse_event('error', ['code' => 'edit_page_not_found', 'message' => '要修改的页面不存在或已下线。']);
+            exit;
+        }
+        $editMode = $session['edit_mode'] ?? '';
+        if ($editMode === 'edit_owner') {
+            if (!current_user_can_edit_page($editPage)) {
+                record_publish_event($sessionId, $session['page_slug'], 'generate', 'failed', 'forbidden_edit_session');
+                sse_event('error', ['code' => 'forbidden_edit_session', 'message' => '你没有权限覆盖这个页面。']);
+                exit;
+            }
+        } elseif ($editMode === 'edit_token') {
+            if (empty($editPage['editable'])) {
+                record_publish_event($sessionId, $session['page_slug'], 'generate', 'failed', 'forbidden_edit_session');
+                sse_event('error', ['code' => 'forbidden_edit_session', 'message' => '这个页面当前不可通过邮件链接修改。']);
+                exit;
+            }
+        } else {
+            record_publish_event($sessionId, $session['page_slug'], 'generate', 'failed', 'invalid_edit_session');
+            sse_event('error', ['code' => 'invalid_edit_session', 'message' => '编辑会话无效，请重新进入修改链接。']);
+            exit;
+        }
+    }
+
+    $quotaCharge = consume_quota('generate');
+    if (!$quotaCharge['ok']) {
         record_publish_event($sessionId, $session['page_slug'] ?: null, 'generate', 'failed', 'quota_exceeded');
         sse_event('error', ['code' => 'quota_exceeded', 'message' => '今日生成额度已用完。登录后每天可生成 50 个页面。']);
         exit;
@@ -57,6 +88,7 @@ try {
     write_live_preview($sessionId, $raw);
 
     if (strpos($raw, '<!-- REFUSED:') !== false) {
+        refund_generate_charge($quotaCharge);
         record_publish_event($sessionId, $session['page_slug'] ?: null, 'generate', 'refused', 'AI refused the request', $usage);
         sse_event('error', ['code' => 'refused', 'message' => '这个请求不适合公开生成，请调整内容后再试。']);
         exit;
@@ -66,19 +98,13 @@ try {
     validate_generated_html($html);
     $pageSlug = $session['page_slug'] ?: generate_unique_slug();
     $html = move_session_assets_to_slug($sessionId, $pageSlug, $html);
-    $isAdult = !empty($data['is_adult']) || conversation_indicates_adult($messages);
+    $isAdult = ($editPage && !empty($editPage['is_adult'])) || !empty($data['is_adult']) || conversation_indicates_adult($messages);
     if ($isAdult) {
         $html = inject_adult_gate($html, $pageSlug);
     }
     $html = inject_generated_csp($html);
     $html = inject_generated_footer($html);
     write_live_preview($sessionId, $html);
-
-    $quota = consume_quota('generate');
-    if (!$quota['ok']) {
-        sse_event('error', ['code' => 'quota_exceeded', 'message' => '今日生成额度已用完。登录后每天可生成 50 个页面。']);
-        exit;
-    }
 
     sse_event('stage', ['stage' => 'writing']);
     $path = xlog_config('site_dir') . '/' . $pageSlug . '.html';
@@ -100,6 +126,7 @@ try {
     }
     db_exec('UPDATE sessions SET page_slug = ?, state = ?, updated_at = ? WHERE id = ?', [$pageSlug, 'done', $now, $sessionId]);
     record_publish_event($sessionId, $pageSlug, 'generate', 'success', null, $usage, $isAdult);
+    $quotaCharge = null;
     try {
         build_recent_html_file();
     } catch (Throwable $e) {
@@ -111,8 +138,16 @@ try {
     sse_event('result', ['url' => $url, 'slug' => $pageSlug, 'qr_payload' => $url]);
     sse_event('done', ['usage' => $usage]);
 } catch (Throwable $e) {
+    refund_generate_charge($quotaCharge);
     record_publish_event($sessionId ?? null, isset($session) ? ($session['page_slug'] ?: null) : null, 'generate', 'failed', $e->getMessage(), $usage ?? []);
     sse_event('error', ['code' => 'publish_failed', 'message' => $e->getMessage()]);
+}
+
+function refund_generate_charge(&$charge) {
+    if ($charge) {
+        refund_quota('generate', $charge);
+        $charge = null;
+    }
 }
 
 function api_turnstile_ok($token) {

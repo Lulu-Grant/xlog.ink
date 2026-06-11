@@ -42,8 +42,11 @@ function page_edit_seed_messages(array $page) {
     ];
 }
 
-function create_page_edit_session(array $page) {
-    return create_session($page['slug'], page_edit_seed_messages($page));
+function create_page_edit_session(array $page, $mode) {
+    if (!in_array($mode, ['edit_owner', 'edit_token'], true)) {
+        throw new InvalidArgumentException('Invalid edit mode');
+    }
+    return create_session($page['slug'], page_edit_seed_messages($page), $mode);
 }
 
 function current_user_can_edit_page(array $page) {

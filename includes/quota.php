@@ -5,6 +5,8 @@ require_once __DIR__ . '/db.php';
 
 function quota_limit_for($kind, $userId) {
     if ($kind === 'chat_turn') return 200;
+    if ($kind === 'session_create') return $userId ? 200 : 50;
+    if ($kind === 'upload_image') return $userId ? 400 : 80;
     if ($kind === 'generate' && xlog_config('billing.credit_mode', false) && $userId) {
         return PHP_INT_MAX;
     }
@@ -24,6 +26,13 @@ function quota_increment($key, $kind) {
     db_exec(
         'INSERT INTO quota_counters (key, date, kind, count) VALUES (?, ?, ?, 1)
          ON CONFLICT(key, date, kind) DO UPDATE SET count = count + 1',
+        [$key, utc_date(), $kind]
+    );
+}
+
+function quota_decrement($key, $kind) {
+    db_exec(
+        'UPDATE quota_counters SET count = CASE WHEN count > 0 THEN count - 1 ELSE 0 END WHERE key = ? AND date = ? AND kind = ?',
         [$key, utc_date(), $kind]
     );
 }
@@ -69,7 +78,7 @@ function quota_status($kind = 'generate') {
 
 function consume_quota($kind = 'generate') {
     $pdo = db();
-    $pdo->beginTransaction();
+    $pdo->exec('BEGIN IMMEDIATE');
     try {
         $userId = current_user_id();
         if ($kind === 'generate' && xlog_config('billing.credit_mode', false) && $userId) {
@@ -78,7 +87,7 @@ function consume_quota($kind = 'generate') {
             $credits = $row ? (int)$row['credits'] : 0;
             if ($credits < $cost) {
                 $pdo->commit();
-                return ['ok' => false, 'remaining' => 0, 'identity' => 'user', 'reason' => 'credits_exhausted'];
+                return ['ok' => false, 'remaining' => 0, 'identity' => 'user', 'reason' => 'credits_exhausted', 'kind' => $kind];
             }
             db_exec('UPDATE users SET credits = credits - ? WHERE id = ?', [$cost, $userId]);
             db_exec(
@@ -86,7 +95,16 @@ function consume_quota($kind = 'generate') {
                 [$userId, -$cost, 'generate', null, now_iso()]
             );
             $pdo->commit();
-            return ['ok' => true, 'remaining' => intdiv($credits - $cost, $cost), 'identity' => 'user', 'reason' => null];
+            return [
+                'ok' => true,
+                'remaining' => intdiv($credits - $cost, $cost),
+                'identity' => 'user',
+                'reason' => null,
+                'kind' => $kind,
+                'credit_mode' => true,
+                'user_id' => $userId,
+                'cost' => $cost,
+            ];
         }
         if ($userId) {
             $key = 'user:' . $userId;
@@ -94,11 +112,18 @@ function consume_quota($kind = 'generate') {
             $used = quota_count($key, $kind);
             if ($used >= $limit) {
                 $pdo->commit();
-                return ['ok' => false, 'remaining' => 0, 'identity' => 'user', 'reason' => 'daily_quota_exceeded'];
+                return ['ok' => false, 'remaining' => 0, 'identity' => 'user', 'reason' => 'daily_quota_exceeded', 'kind' => $kind];
             }
             quota_increment($key, $kind);
             $pdo->commit();
-            return ['ok' => true, 'remaining' => $limit - $used - 1, 'identity' => 'user', 'reason' => null];
+            return [
+                'ok' => true,
+                'remaining' => $limit - $used - 1,
+                'identity' => 'user',
+                'reason' => null,
+                'kind' => $kind,
+                'keys' => [$key],
+            ];
         }
 
         $limit = quota_limit_for($kind, null);
@@ -106,13 +131,44 @@ function consume_quota($kind = 'generate') {
         foreach ($keys as $key) {
             if (quota_count($key, $kind) >= $limit) {
                 $pdo->commit();
-                return ['ok' => false, 'remaining' => 0, 'identity' => 'guest', 'reason' => 'daily_quota_exceeded'];
+                return ['ok' => false, 'remaining' => 0, 'identity' => 'guest', 'reason' => 'daily_quota_exceeded', 'kind' => $kind];
             }
         }
         foreach ($keys as $key) quota_increment($key, $kind);
         $remaining = $limit - max(quota_count($keys[0], $kind), quota_count($keys[1], $kind));
         $pdo->commit();
-        return ['ok' => true, 'remaining' => max(0, $remaining), 'identity' => 'guest', 'reason' => null];
+        return [
+            'ok' => true,
+            'remaining' => max(0, $remaining),
+            'identity' => 'guest',
+            'reason' => null,
+            'kind' => $kind,
+            'keys' => $keys,
+        ];
+    } catch (Throwable $e) {
+        if ($pdo->inTransaction()) $pdo->rollBack();
+        throw $e;
+    }
+}
+
+function refund_quota($kind, array $charge) {
+    if (empty($charge['ok']) || ($charge['kind'] ?? $kind) !== $kind) return;
+    $pdo = db();
+    $pdo->exec('BEGIN IMMEDIATE');
+    try {
+        if (!empty($charge['credit_mode']) && !empty($charge['user_id'])) {
+            $cost = max(1, (int)($charge['cost'] ?? xlog_config('billing.generate_credit_cost', 1)));
+            db_exec('UPDATE users SET credits = credits + ? WHERE id = ?', [$cost, (int)$charge['user_id']]);
+            db_exec(
+                'INSERT INTO credit_transactions (user_id, delta, reason, ref, created_at) VALUES (?, ?, ?, ?, ?)',
+                [(int)$charge['user_id'], $cost, $kind . '_refund', null, now_iso()]
+            );
+        } else {
+            foreach (($charge['keys'] ?? []) as $key) {
+                quota_decrement($key, $kind);
+            }
+        }
+        $pdo->commit();
     } catch (Throwable $e) {
         if ($pdo->inTransaction()) $pdo->rollBack();
         throw $e;

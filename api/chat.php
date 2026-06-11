@@ -34,8 +34,12 @@ try {
         sse_event('delta', ['text' => $delta]);
     });
     $ready = preg_match('/\n?\s*\[READY\]\s*$/u', $assistant) === 1;
-    $clean = preg_replace('/\n?\s*\[READY\]\s*$/u', '', $assistant);
+    $uploadPrompt = preg_match('/\n?\s*\[UPLOAD\]\s*$/u', $assistant) === 1;
+    $clean = preg_replace('/(?:\n?\s*\[(?:READY|UPLOAD)\]\s*)+$/u', '', $assistant);
     append_session_message($sessionId, 'assistant', trim($clean));
+    if ($uploadPrompt) {
+        sse_event('upload_prompt', []);
+    }
     if ($ready) {
         db_exec('UPDATE sessions SET state = ?, updated_at = ? WHERE id = ?', ['ready', now_iso(), $sessionId]);
         sse_event('ready', []);

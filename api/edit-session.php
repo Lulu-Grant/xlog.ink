@@ -10,5 +10,5 @@ $page = db_one('SELECT * FROM pages WHERE slug = ? AND status = ?', [$slug, 'liv
 if (!$page) api_error('not_found', 'Page not found', 404);
 if (!current_user_can_edit_page($page)) api_error('forbidden', '你没有权限修改这个页面。', 403);
 
-$sessionId = create_page_edit_session($page);
+$sessionId = create_page_edit_session($page, 'edit_owner');
 api_json(['session_id' => $sessionId]);

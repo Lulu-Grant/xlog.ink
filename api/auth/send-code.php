@@ -6,6 +6,7 @@ $data = json_input();
 $email = normalize_email($data['email'] ?? '');
 if ($email === '') api_error('bad_email', 'Invalid email');
 
+db_exec('DELETE FROM login_codes WHERE expires_at < ?', [now_iso()]);
 $recent = db_one('SELECT created_at FROM login_codes WHERE email = ? ORDER BY created_at DESC LIMIT 1', [$email]);
 if ($recent && strtotime($recent['created_at']) > time() - 60) {
     api_error('too_frequent', 'Please wait before requesting another code', 429);

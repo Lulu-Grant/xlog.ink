@@ -18,7 +18,7 @@ $pages = array_map(function ($row) {
         'url' => page_public_url($row['slug']),
         'created_at' => $row['created_at'],
         'updated_at' => $row['updated_at'],
-        'editable' => true,
+        'editable' => (bool)$row['editable'],
         'is_adult' => (bool)$row['is_adult'],
         'status' => $row['status'],
     ];

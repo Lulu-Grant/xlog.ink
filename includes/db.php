@@ -14,6 +14,7 @@ function db() {
     ]);
     $pdo->exec('PRAGMA journal_mode=WAL');
     $pdo->exec('PRAGMA foreign_keys=ON');
+    $pdo->exec('PRAGMA busy_timeout=5000');
     db_init($pdo);
     return $pdo;
 }
@@ -58,6 +59,7 @@ CREATE TABLE IF NOT EXISTS sessions (
     id TEXT PRIMARY KEY,
     user_id INTEGER,
     page_slug TEXT,
+    edit_mode TEXT NOT NULL DEFAULT '',
     messages TEXT NOT NULL DEFAULT '[]',
     state TEXT NOT NULL DEFAULT 'chatting',
     ip TEXT NOT NULL,
@@ -123,6 +125,15 @@ CREATE TABLE IF NOT EXISTS mail_events (
 );
 CREATE INDEX IF NOT EXISTS idx_mail_events_lookup ON mail_events(kind, event_key, created_at);
 ");
+    db_ensure_column($pdo, 'sessions', 'edit_mode', "TEXT NOT NULL DEFAULT ''");
+}
+
+function db_ensure_column(PDO $pdo, $table, $column, $definition) {
+    $stmt = $pdo->query('PRAGMA table_info(' . $table . ')');
+    foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
+        if (($row['name'] ?? '') === $column) return;
+    }
+    $pdo->exec('ALTER TABLE ' . $table . ' ADD COLUMN ' . $column . ' ' . $definition);
 }
 
 function db_one($sql, array $params = []) {
@@ -168,12 +179,12 @@ function append_session_message($sessionId, $role, $content) {
     return true;
 }
 
-function create_session($pageSlug = null, array $seedMessages = []) {
+function create_session($pageSlug = null, array $seedMessages = [], $editMode = '') {
     $id = bin2hex(random_bytes(16));
     $now = now_iso();
     db_exec(
-        'INSERT INTO sessions (id, user_id, page_slug, messages, state, ip, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-        [$id, current_user_id(), $pageSlug, json_encode($seedMessages, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES), 'chatting', client_ip(), $now, $now]
+        'INSERT INTO sessions (id, user_id, page_slug, edit_mode, messages, state, ip, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        [$id, current_user_id(), $pageSlug, $editMode, json_encode($seedMessages, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES), 'chatting', client_ip(), $now, $now]
     );
     return $id;
 }

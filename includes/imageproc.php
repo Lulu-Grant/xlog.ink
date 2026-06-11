@@ -99,20 +99,24 @@ function move_session_assets_to_slug($sessionId, $slug, $html) {
     $tmpDir = image_session_dir($sessionId);
     $finalDir = xlog_config('asset_dir') . '/' . $slug;
     if (is_dir($tmpDir)) {
-        if (is_dir($finalDir)) {
-            foreach (glob($finalDir . '/*') ?: [] as $old) @unlink($old);
-        } else {
-            @mkdir($finalDir, 0755, true);
-        }
+        if (!is_dir($finalDir)) @mkdir($finalDir, 0755, true);
+        $oldBase = rtrim(xlog_config('base_url'), '/') . '/site-assets/tmp/' . $sessionId . '/';
+        $newBase = rtrim(xlog_config('base_url'), '/') . '/site-assets/' . $slug . '/';
         foreach (glob($tmpDir . '/*.webp') ?: [] as $file) {
-            @rename($file, $finalDir . '/' . basename($file));
+            $basename = basename($file);
+            $targetName = $basename;
+            if (file_exists($finalDir . '/' . $targetName)) {
+                $targetName = substr($sessionId, 0, 8) . '-' . $basename;
+            }
+            @rename($file, $finalDir . '/' . $targetName);
+            $html = str_replace($oldBase . $basename, $newBase . $targetName, $html);
+            db_exec(
+                'UPDATE images SET slug = ?, path = ? WHERE session_id = ? AND path = ?',
+                [$slug, '/site-assets/' . $slug . '/' . $targetName, $sessionId, '/site-assets/tmp/' . $sessionId . '/' . $basename]
+            );
         }
         @rmdir($tmpDir);
     }
-    $oldBase = rtrim(xlog_config('base_url'), '/') . '/site-assets/tmp/' . $sessionId . '/';
-    $newBase = rtrim(xlog_config('base_url'), '/') . '/site-assets/' . $slug . '/';
-    $html = str_replace($oldBase, $newBase, $html);
-    db_exec('UPDATE images SET slug = ?, path = REPLACE(path, ?, ?) WHERE session_id = ?', [$slug, '/site-assets/tmp/' . $sessionId . '/', '/site-assets/' . $slug . '/', $sessionId]);
     return $html;
 }
 

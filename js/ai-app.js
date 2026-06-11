@@ -143,7 +143,7 @@
   }
 
   function maybeShowUploadCard(text) {
-    if (!/(上传|图片|照片|资料图|主视觉|头像|产品图|活动图|image|photo)/i.test(text || '')) return;
+    if (!/(上传|图片|照片|资料图|主视觉|头像|产品图|活动图|素材|配图|logo|门头|店面|环境|作品|截图|海报图|产品照|image|photo|asset|material)/i.test(text || '')) return;
     if (document.querySelector('.upload-card[data-active="1"]')) return;
     addUploadCard();
   }
@@ -254,6 +254,7 @@
     addMessage('user', text);
     input.value = '';
     var ai = addMessage('assistant', '');
+    var streamTail = '';
     fetch('/api/chat.php', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -261,9 +262,16 @@
     }).then(function (r) {
       return readSse(r, {
         delta: function (d) {
-          ai.textContent += d.text || '';
-          ai.textContent = ai.textContent.replace(/\s*\[READY\]\s*$/g, '');
+          streamTail += d.text || '';
+          if (streamTail.length > 12) {
+            ai.textContent += streamTail.slice(0, -12);
+            streamTail = streamTail.slice(-12);
+          }
+          ai.textContent = ai.textContent.replace(/\s*\[(READY|UPLOAD)\]\s*$/g, '');
           messages.scrollTop = messages.scrollHeight;
+        },
+        upload_prompt: function () {
+          addUploadCard();
         },
         ready: function () {
           showGenerateCard('AI 已经判断信息足够，可以开始生成。');
@@ -272,6 +280,10 @@
         error: function (d) { addMessage('system', d.message || 'AI 对话失败'); }
       });
     }).then(function () {
+      if (streamTail) {
+        ai.textContent += streamTail.replace(/\s*\[(READY|UPLOAD)\]\s*$/g, '');
+        streamTail = '';
+      }
       maybeShowUploadCard(ai.textContent);
       if (publishIntent) showGenerateCard('你刚才提到了生成或发布，可以从这里确认生成。');
     }).finally(function () { state.busy = false; });
@@ -372,7 +384,10 @@
       '</div>' +
       '<div class="email-row"><input class="owner-email" type="email" placeholder="输入邮箱，获得后续修改链接"><button type="button" data-bind-email="1">发送修改链接</button></div>');
     card.dataset.pageUrl = url;
-    drawPseudoQr(card.querySelector('.qr-canvas'), url);
+    if (!drawQr(card.querySelector('.qr-canvas'), url)) {
+      var downloadBtn = card.querySelector('button[data-download-qr]');
+      if (downloadBtn) downloadBtn.hidden = true;
+    }
   }
 
   function bindEmail(card) {
@@ -454,7 +469,7 @@
     });
   }
 
-  function drawPseudoQr(canvas, text) {
+  function drawQr(canvas, text) {
     if (window.qrcode) {
       var qr = window.qrcode(0, 'M');
       qr.addData(text);
@@ -472,25 +487,14 @@
           }
         }
       }
-      return;
+      return true;
     }
-    var ctx = canvas.getContext('2d');
-    var size = 29;
-    var cell = canvas.width / size;
-    ctx.fillStyle = '#fff';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    ctx.fillStyle = '#000';
-    function square(x, y, w) { ctx.fillRect(x * cell, y * cell, w * cell, w * cell); }
-    [[1,1],[21,1],[1,21]].forEach(function (p) {
-      square(p[0], p[1], 7); ctx.fillStyle = '#fff'; square(p[0]+1, p[1]+1, 5); ctx.fillStyle = '#000'; square(p[0]+2, p[1]+2, 3);
-    });
-    var seed = 0;
-    for (var i = 0; i < text.length; i++) seed = (seed * 31 + text.charCodeAt(i)) >>> 0;
-    for (var y = 0; y < size; y++) for (var x = 0; x < size; x++) {
-      if ((x < 9 && y < 9) || (x > 19 && y < 9) || (x < 9 && y > 19)) continue;
-      seed = (seed * 1664525 + 1013904223) >>> 0;
-      if (seed % 3 === 0) ctx.fillRect(Math.floor(x * cell), Math.floor(y * cell), Math.ceil(cell), Math.ceil(cell));
-    }
+    if (!canvas) return false;
+    var fallback = document.createElement('div');
+    fallback.className = 'qr-fallback';
+    fallback.textContent = '二维码生成失败，请复制链接。';
+    canvas.replaceWith(fallback);
+    return false;
   }
 
   function escapeHtml(s) {

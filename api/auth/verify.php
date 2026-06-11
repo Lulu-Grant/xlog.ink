@@ -16,6 +16,7 @@ if (!password_verify($code, $row['code_hash'])) {
     db_exec('UPDATE login_codes SET attempts = attempts + 1 WHERE rowid = ?', [$row['rowid']]);
     api_error('invalid_code', 'Invalid code', 400);
 }
+db_exec('DELETE FROM login_codes WHERE email = ?', [$email]);
 
 $user = db_one('SELECT * FROM users WHERE email = ?', [$email]);
 if (!$user) {

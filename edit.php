@@ -13,6 +13,6 @@ if (!$page) {
     echo 'Edit link not found';
     exit;
 }
-$sessionId = create_page_edit_session($page);
+$sessionId = create_page_edit_session($page, 'edit_token');
 header('Location: /index.php?edit_session=' . urlencode($sessionId));
 exit;
