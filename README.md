@@ -24,8 +24,7 @@ prompts/             对话阶段和生成阶段 system prompt
 scripts/             迁移、诊断、recent 构建、成本报表、清理脚本
 docs/                V2 定稿设计、示例配置、Nginx 配置片段
 css/ js/             V2 前端资源
-partials/ assets/    旧站公共片段和静态资源
-site-samples/        旧生成页样本，用于回归与风格参考
+assets/              生成页兼容样式、OG 图和品牌资源
 data/                运行时数据目录，仅保留可迁移 JSONL，不提交 DB/日志
 site/                生成页运行目录，仓库只保留 .gitkeep
 site-assets/         上传资源运行目录，仓库只保留 .gitkeep

@@ -78,12 +78,3 @@ function render_turnstile_error_page($uiLang, $backUrl) {
        . '</div></body></html>';
     exit;
 }
-
-function get_footer_html() {
-    static $cache = null;
-    if ($cache === null) {
-        $path = dirname(__DIR__) . '/partials/footer.html';
-        $cache = is_file($path) ? file_get_contents($path) : '';
-    }
-    return $cache;
-}

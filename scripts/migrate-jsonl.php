@@ -3,7 +3,6 @@ require_once __DIR__ . '/../includes/db.php';
 
 $files = [
     XLOG_ROOT . '/data/pages.jsonl',
-    XLOG_ROOT . '/pages.jsonl',
 ];
 
 $count = 0;

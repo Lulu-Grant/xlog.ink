@@ -14,6 +14,7 @@ data/mail.log
 data/*.log
 ratelimit/*.json
 data/ratelimit/
+data/previews/
 127.0.0.1.json
 
 # Generated pages and uploaded assets
