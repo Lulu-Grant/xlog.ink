@@ -55,6 +55,7 @@ try {
     if ($isAdult) {
         $html = inject_adult_gate($html, $pageSlug);
     }
+    $html = inject_generated_csp($html);
     $html = inject_generated_footer($html);
 
     $quota = consume_quota('generate');
@@ -133,6 +134,15 @@ function validate_generated_html($html) {
 function inject_generated_footer($html) {
     $badge = '<div style="position:fixed;right:12px;bottom:12px;z-index:9999;font:12px/1.2 ui-monospace,monospace;background:rgba(0,0,0,.72);color:#fff;padding:8px 10px;border-radius:999px"><a href="https://xlog.ink" style="color:inherit;text-decoration:none">Made with xlog.ink</a></div>';
     return preg_replace('/<\/body>/i', $badge . "\n</body>", $html, 1);
+}
+
+function inject_generated_csp($html) {
+    if (stripos($html, 'http-equiv="Content-Security-Policy"') !== false || stripos($html, "http-equiv='Content-Security-Policy'") !== false) {
+        return $html;
+    }
+    $policy = "default-src 'self'; img-src 'self' data: https://xlog.ink; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; font-src 'self' data:; media-src 'self' https://xlog.ink; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'";
+    $meta = '<meta http-equiv="Content-Security-Policy" content="' . h($policy) . '">';
+    return preg_replace('/<\/head>/i', $meta . "\n</head>", $html, 1);
 }
 
 function inject_adult_gate($html, $slug) {
