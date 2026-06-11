@@ -15,7 +15,7 @@ $turnstileSiteKey = xlog_config('turnstile.site_key', '');
   <meta property="og:title" content="xlog.ink - AI 个人页面生成">
   <meta property="og:description" content="聊天、上传图片、生成自由 HTML 页面，并自动分发到二级域名。">
   <meta property="og:image" content="/assets/og/cover.jpg">
-  <link rel="stylesheet" href="/css/page-ai.css?v=20260611v15">
+  <link rel="stylesheet" href="/css/page-ai.css?v=20260611v16">
   <link rel="icon" href="/favicon.ico">
   <?php if ($turnstileEnabled && $turnstileSiteKey !== ''): ?>
   <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
@@ -63,17 +63,17 @@ $turnstileSiteKey = xlog_config('turnstile.site_key', '');
       </div>
 
       <section class="chat-canvas">
-        <div id="messages" class="messages" aria-live="polite"></div>
+        <div id="messages" class="messages" role="log"></div>
       </section>
 
       <form id="composer" class="composer">
         <textarea id="messageInput" rows="1" placeholder="继续描述你的页面..."></textarea>
-        <button type="submit" aria-label="发送">➤</button>
+        <button type="submit" aria-label="发送"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M3.5 11.2 20.5 3.6l-7.1 17.1-2.6-7-7.3-2.5Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg></button>
       </form>
     </section>
 
   </main>
   <script src="/js/qrcode.min.js?v=1.4.4"></script>
-  <script src="/js/ai-app.js?v=20260611v16"></script>
+  <script src="/js/ai-app.js?v=20260611v17"></script>
 </body>
 </html>

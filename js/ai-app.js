@@ -212,9 +212,22 @@
     if (!q) return;
     var text = q.credits !== undefined ? '积分 ' + q.credits : '剩余 ' + q.remaining + '/' + q.limit;
     $('#quotaText').textContent = text;
-    if ($('#brandLink') && window.matchMedia('(max-width: 760px)').matches) {
-      $('#brandLink').textContent = 'xlog.ink · ' + text;
+  }
+
+  var toastEl = null;
+  var toastTimer = null;
+  function toast(text) {
+    if (!toastEl) {
+      toastEl = document.createElement('div');
+      toastEl.className = 'toast';
+      toastEl.setAttribute('role', 'status');
+      toastEl.setAttribute('aria-live', 'polite');
+      document.body.appendChild(toastEl);
     }
+    toastEl.textContent = text;
+    toastEl.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(function () { toastEl.classList.remove('show'); }, 2000);
   }
 
   function setUser(user) {
@@ -517,7 +530,7 @@
         card.dataset.active = '0';
         card.innerHTML = '<strong>图片已上传</strong><p>' + escapeHtml(caption || '无说明') + '</p><img src="' + escapeAttr(d.url) + '" alt="" style="width:96px;height:96px;object-fit:cover;border-radius:12px">';
       }
-      addMessage('system', '图片已上传并转换为 WebP。');
+      toast('图片已上传并转换为 WebP');
     });
   }
 
@@ -608,8 +621,14 @@
     if (!delivery) return;
     var url = delivery.dataset.pageUrl || state.lastUrl;
     if (e.target.closest('button[data-copy-url]')) {
-      navigator.clipboard.writeText(url);
-      addMessage('system', '链接已复制。');
+      var copyBtn = e.target.closest('button[data-copy-url]');
+      navigator.clipboard.writeText(url).then(function () {
+        toast('链接已复制');
+        copyBtn.textContent = '已复制 ✓';
+        setTimeout(function () { copyBtn.textContent = '复制链接'; }, 1500);
+      }).catch(function () {
+        toast('复制失败，请手动复制');
+      });
       return;
     }
     if (e.target.closest('button[data-download-qr]')) {
