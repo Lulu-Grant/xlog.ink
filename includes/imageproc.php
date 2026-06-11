@@ -62,7 +62,14 @@ function image_with_imagick($src, $out) {
     if (method_exists($im, 'autoOrient')) $im->autoOrient();
     if ($im->getNumberImages() > 1) $im->setIteratorIndex(0);
     $im->stripImage();
-    $im->thumbnailImage(1600, 1600, true, true);
+    $w = max(1, $im->getImageWidth());
+    $h = max(1, $im->getImageHeight());
+    $scale = min(1, 1600 / max($w, $h));
+    $nw = max(1, (int)round($w * $scale));
+    $nh = max(1, (int)round($h * $scale));
+    if ($scale < 1) {
+        $im->thumbnailImage($nw, $nh, true);
+    }
     $im->setImageFormat('webp');
     $im->setImageCompressionQuality(80);
     $im->writeImage($out);
