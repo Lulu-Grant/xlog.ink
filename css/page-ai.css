@@ -379,14 +379,13 @@ button:disabled { cursor: default; opacity: .45; }
   overflow-wrap: anywhere;
 }
 .msg.assistant::before {
-  content: "xlog ";
+  content: "";
   display: inline-block;
-  min-height: 14px;
-  padding-left: 18px;
-  margin-right: 2px;
-  background: url("/assets/brand/xlog-mark.svg") left 50% / 14px 14px no-repeat;
-  color: var(--acc);
-  font-weight: 700;
+  width: 48px;
+  height: 14px;
+  margin-right: 7px;
+  background: url("/assets/brand/xlog-prefix.svg") left 50% / contain no-repeat;
+  vertical-align: -2px;
 }
 .msg.user {
   align-self: flex-end;
