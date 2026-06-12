@@ -361,16 +361,18 @@ button:disabled { cursor: default; opacity: .45; }
   align-self: flex-end;
   width: auto;
   max-width: min(78%, 520px);
-  padding: 8px 12px;
+  padding: 2px 12px 2px 0;
   border-left: 0;
-  border: var(--bw) solid rgba(122, 93, 244, .25);
-  border-radius: 8px 8px 0 8px;
-  background: var(--user);
+  border-right: 3px solid var(--acc);
+  border-radius: 0;
+  background: transparent;
   color: var(--ink);
-  text-align: left;
+  text-align: right;
 }
 .msg.user::before {
-  content: "";
+  content: "> ";
+  color: var(--acc);
+  font-weight: 700;
 }
 .msg.system {
   align-self: stretch;
