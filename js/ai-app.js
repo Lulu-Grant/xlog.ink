@@ -16,12 +16,12 @@
   var SESSION_STORAGE_KEY = 'xlog:lastSessionId';
   var locale = normalizeLocale(window.XLOG_LOCALE || document.body.dataset.locale || '');
   var i18n = window.XLOG_I18N || {};
+  var coarsePointer = window.matchMedia('(pointer: coarse)').matches;
 
   var $ = function (s) { return document.querySelector(s); };
   var messages = $('#messages');
   var input = $('#messageInput');
   var sendBtn = document.querySelector('#composer button[type="submit"]');
-  var coarsePointer = window.matchMedia('(pointer: coarse)').matches;
 
   function updateAppViewportHeight() {
     var height = window.visualViewport && window.visualViewport.height ? window.visualViewport.height : window.innerHeight;
@@ -43,16 +43,56 @@
   document.querySelector('.chat-canvas').appendChild(jumpBtn);
   jumpBtn.addEventListener('click', function () { scrollDown(true); });
 
+  var chatCanvas = document.querySelector('.chat-canvas');
+  var scrollBar = document.createElement('div');
+  scrollBar.className = 'scroll-fadebar';
+  scrollBar.setAttribute('aria-hidden', 'true');
+  chatCanvas.appendChild(scrollBar);
+
   var follow = true;
+  var scrollTimer = null;
+  function updateScrollBar(show) {
+    var maxScroll = messages.scrollHeight - messages.clientHeight;
+    if (maxScroll <= 2) {
+      scrollBar.classList.remove('is-visible');
+      return;
+    }
+    var chatRect = chatCanvas.getBoundingClientRect();
+    var msgRect = messages.getBoundingClientRect();
+    var trackTop = msgRect.top - chatRect.top;
+    var trackHeight = messages.clientHeight;
+    var thumbHeight = Math.max(28, Math.round(trackHeight * trackHeight / messages.scrollHeight));
+    var thumbTop = trackTop + Math.round((trackHeight - thumbHeight) * (messages.scrollTop / maxScroll));
+    scrollBar.style.top = thumbTop + 'px';
+    scrollBar.style.height = thumbHeight + 'px';
+    if (show) scrollBar.classList.add('is-visible');
+  }
+  function revealScrollBar() {
+    updateScrollBar(true);
+    clearTimeout(scrollTimer);
+    scrollTimer = setTimeout(function () {
+      scrollBar.classList.remove('is-visible');
+    }, 700);
+  }
   messages.addEventListener('scroll', function () {
+    revealScrollBar();
     follow = messages.scrollHeight - messages.scrollTop - messages.clientHeight < 80;
     jumpBtn.hidden = follow;
   });
+  messages.addEventListener('mouseenter', function () { updateScrollBar(true); });
+  messages.addEventListener('mouseleave', function () {
+    clearTimeout(scrollTimer);
+    scrollTimer = setTimeout(function () {
+      scrollBar.classList.remove('is-visible');
+    }, 220);
+  });
+  window.addEventListener('resize', function () { updateScrollBar(false); });
 
   function scrollDown(force) {
     if (force) follow = true;
     if (follow) {
       messages.scrollTop = messages.scrollHeight;
+      updateScrollBar(false);
       jumpBtn.hidden = true;
     } else {
       jumpBtn.hidden = false;
@@ -116,7 +156,6 @@
       '<div class="action-title">' + escapeHtml(t('presetTitle')) + '</div>' +
       '<div class="preset-row" aria-label="Page type presets">' +
       '<button data-prompt="' + escapeAttr(t('promptCard')) + '">' + escapeHtml(t('presetCard')) + '</button>' +
-      '<button data-prompt="' + escapeAttr(t('promptPoster')) + '">' + escapeHtml(t('presetPoster')) + '</button>' +
       '<button data-prompt="' + escapeAttr(t('promptArticle')) + '">' + escapeHtml(t('presetArticle')) + '</button>' +
       '<button data-prompt="' + escapeAttr(t('promptEvent')) + '">' + escapeHtml(t('presetEvent')) + '</button>' +
       '<button data-prompt="' + escapeAttr(t('promptFree')) + '">' + escapeHtml(t('presetFree')) + '</button>' +
@@ -127,7 +166,7 @@
     if (document.querySelector('.hero-logo-card')) return;
     var card = document.createElement('div');
     card.className = 'hero-logo-card';
-    card.innerHTML = '<img src="/assets/brand/xlog-animation-v5.svg" alt="" aria-hidden="true">';
+    card.innerHTML = '<img src="/assets/brand/xlog-animation-v5.svg?v=20260613v2" alt="" aria-hidden="true">';
     messages.appendChild(card);
   }
 
@@ -407,16 +446,22 @@
 
   function rememberSession(sessionId) {
     if (!sessionId) return;
-    try { window.sessionStorage.setItem(SESSION_STORAGE_KEY, sessionId); } catch (e) {}
+    try {
+      window.localStorage.setItem(SESSION_STORAGE_KEY, sessionId);
+      window.sessionStorage.removeItem(SESSION_STORAGE_KEY);
+    } catch (e) {}
   }
 
   function forgetSession() {
-    try { window.sessionStorage.removeItem(SESSION_STORAGE_KEY); } catch (e) {}
+    try {
+      window.localStorage.removeItem(SESSION_STORAGE_KEY);
+      window.sessionStorage.removeItem(SESSION_STORAGE_KEY);
+    } catch (e) {}
   }
 
   function storedSessionId() {
     try {
-      var id = window.sessionStorage.getItem(SESSION_STORAGE_KEY) || '';
+      var id = window.localStorage.getItem(SESSION_STORAGE_KEY) || window.sessionStorage.getItem(SESSION_STORAGE_KEY) || '';
       return /^[a-f0-9]{32}$/.test(id) ? id : '';
     } catch (e) {
       return '';
@@ -541,7 +586,7 @@
     if (state.awaitingEmail) {
       var contextualEmail = extractEmail(text);
       var skipEmailIntent = /(不(用|要|留|绑定|綁定)|暫不|暂不|跳過|跳过|算了|不用了|不要了|skip|no need|not now|no thanks)/i.test(text);
-      if (contextualEmail || skipEmailIntent) {
+      if ((contextualEmail && isStandaloneEmailReply(text, contextualEmail)) || skipEmailIntent) {
         setBusy(true);
         addMessage('user', text);
         input.value = '';
@@ -622,6 +667,7 @@
       }
       if (!turnstileToken) {
         addMessage('system', t('turnstileRequired'));
+        stopLivePreview(t('previewFailed'));
         setBusy(false);
         return;
       }
@@ -805,6 +851,11 @@
 
   function uploadImage(file, caption, slot, card) {
     if (!state.sessionId || !file) return;
+    caption = String(caption || '').trim();
+    if (caption.length > 200) {
+      caption = caption.slice(0, 200);
+      toast(t('captionTruncated'));
+    }
     if (card) {
       card.dataset.uploading = '1';
       card.querySelectorAll('input, button').forEach(function (el) { el.disabled = true; });
@@ -868,6 +919,12 @@
   function extractEmail(text) {
     var match = String(text || '').match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i);
     return match ? match[0] : '';
+  }
+  function isStandaloneEmailReply(text, email) {
+    var rest = String(text || '').replace(email, '');
+    rest = rest.replace(/[：:，,。.！!？?\s]/g, '');
+    rest = rest.replace(/^(邮箱|信箱|電郵|电邮|邮件|郵件|email|mail|我的|是|为|為|绑定|綁定|留|用|thisis|hereis|my)+/i, '');
+    return rest.length <= 4;
   }
 
   function autogrow() {

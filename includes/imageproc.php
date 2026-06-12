@@ -12,6 +12,10 @@ function image_public_url($path) {
 }
 
 function image_process_upload($sessionId, array $file, $caption = '', $slot = '') {
+    $caption = trim((string)$caption);
+    if (mb_strlen($caption, 'UTF-8') > 200) {
+        $caption = mb_substr($caption, 0, 200, 'UTF-8');
+    }
     if (($file['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
         throw new RuntimeException('Upload failed');
     }
@@ -47,7 +51,7 @@ function image_process_upload($sessionId, array $file, $caption = '', $slot = ''
     $slot = in_array($slot, ['hero', 'avatar', 'product', 'gallery'], true) ? $slot : '';
     db_exec(
         'INSERT INTO images (session_id, path, caption, slot, width, height, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
-        [$sessionId, $rel, trim((string)$caption), $slot, $newW, $newH, now_iso()]
+        [$sessionId, $rel, $caption, $slot, $newW, $newH, now_iso()]
     );
     return [
         'id' => (int)db()->lastInsertId(),

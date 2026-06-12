@@ -28,6 +28,8 @@ $quotaCharge = null;
 $editPage = null;
 $editMode = $session['edit_mode'] ?? '';
 $usage = [];
+$generationLocked = false;
+$previousState = (string)($session['state'] ?? 'chatting');
 try {
     if (!api_turnstile_ok($data['turnstile_token'] ?? '')) {
         record_publish_event($sessionId, null, 'generate', 'failed', 'turnstile_failed');
@@ -61,8 +63,16 @@ try {
         exit;
     }
 
+    $generationLocked = lock_publish_session($sessionId);
+    if (!$generationLocked) {
+        record_publish_event($sessionId, $session['page_slug'] ?: null, 'generate', 'failed', 'session_generating');
+        sse_event('error', ['code' => 'session_generating', 'message' => t('api', 'sessionGenerating', $locale)]);
+        exit;
+    }
+
     $quotaCharge = consume_quota('generate');
     if (!$quotaCharge['ok']) {
+        restore_publish_session_state($sessionId, $previousState, $generationLocked);
         record_publish_event($sessionId, $session['page_slug'] ?: null, 'generate', 'failed', 'quota_exceeded');
         sse_event('error', ['code' => 'quota_exceeded', 'message' => t('api', 'quotaExceeded', $locale)]);
         exit;
@@ -85,6 +95,7 @@ try {
 
     if (strpos($raw, '<!-- REFUSED:') !== false) {
         refund_generate_charge($quotaCharge);
+        restore_publish_session_state($sessionId, $previousState, $generationLocked);
         record_publish_event($sessionId, $session['page_slug'] ?: null, 'generate', 'refused', 'AI refused the request', $usage);
         sse_event('error', ['code' => 'refused', 'message' => t('api', 'refused', $locale)]);
         exit;
@@ -122,6 +133,7 @@ try {
         );
     }
     db_exec('UPDATE sessions SET page_slug = ?, state = ?, updated_at = ? WHERE id = ?', [$pageSlug, 'done', $now, $sessionId]);
+    $generationLocked = false;
     record_publish_event($sessionId, $pageSlug, 'generate', 'success', null, $usage, $isAdult);
     if ($adultFlagCleared) {
         record_publish_event($sessionId, $pageSlug, 'adult_flag', 'notice', 'adult_flag_cleared', [], false);
@@ -140,6 +152,7 @@ try {
     sse_event('done', ['usage' => $usage]);
 } catch (Throwable $e) {
     refund_generate_charge($quotaCharge);
+    restore_publish_session_state($sessionId ?? null, $previousState, $generationLocked);
     record_publish_event($sessionId ?? null, isset($session) ? ($session['page_slug'] ?: null) : null, 'generate', 'failed', $e->getMessage(), $usage);
     error_log('publish failed: ' . $e->getMessage());
     sse_event('error', ['code' => 'publish_failed', 'message' => friendly_publish_error($e, $locale ?? resolve_locale())]);
@@ -150,6 +163,21 @@ function refund_generate_charge(&$charge) {
         refund_quota('generate', $charge);
         $charge = null;
     }
+}
+
+function lock_publish_session($sessionId) {
+    $updated = db_exec(
+        'UPDATE sessions SET state = ?, updated_at = ? WHERE id = ? AND state IN (?, ?, ?)',
+        ['generating', now_iso(), $sessionId, 'chatting', 'ready', 'done']
+    )->rowCount();
+    return $updated === 1;
+}
+
+function restore_publish_session_state($sessionId, $state, &$locked) {
+    if (!$locked || !$sessionId) return;
+    $state = in_array($state, ['chatting', 'ready', 'done'], true) ? $state : 'chatting';
+    db_exec('UPDATE sessions SET state = ?, updated_at = ? WHERE id = ? AND state = ?', [$state, now_iso(), $sessionId, 'generating']);
+    $locked = false;
 }
 
 function api_turnstile_ok($token) {
@@ -167,53 +195,6 @@ function extract_html_document($raw) {
         throw new RuntimeException('AI did not return a complete HTML document');
     }
     return trim($raw);
-}
-
-function live_preview_path($sessionId) {
-    if (!preg_match('/^[a-f0-9]{32}$/', $sessionId)) {
-        throw new RuntimeException('Invalid preview session');
-    }
-    $dir = xlog_config('data_dir') . '/previews';
-    if (!is_dir($dir)) @mkdir($dir, 0755, true);
-    return $dir . '/' . $sessionId . '.html';
-}
-
-function write_live_preview($sessionId, $raw) {
-    try {
-        file_put_contents(live_preview_path($sessionId), live_preview_document($raw), LOCK_EX);
-    } catch (Throwable $e) {
-        error_log('live preview write failed: ' . $e->getMessage());
-    }
-}
-
-function live_preview_document($raw) {
-    $clean = preg_replace('/^\s*```(?:html)?\s*/i', '', (string)$raw);
-    $clean = preg_replace('/```\s*$/', '', $clean);
-    $clean = trim($clean);
-    $pos = stripos($clean, '<!DOCTYPE html');
-    if ($pos === false) $pos = stripos($clean, '<html');
-    if ($pos !== false) {
-        $clean = substr($clean, $pos);
-    }
-    if ($clean === '' || strpos($clean, '<') === false) {
-        $locale = validate_lang($GLOBALS['xlog_publish_locale'] ?? resolve_locale());
-        $escaped = h($clean === '' ? t('app', 'previewWaitingRaw', $locale) : $clean);
-        return <<<HTML
-<!DOCTYPE html>
-<html lang="{$locale}">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
-  <style>
-    *{box-sizing:border-box}body{margin:0;min-height:100vh;display:grid;place-items:center;background:#0b0c10;color:#b6ffe7;font:14px/1.7 ui-monospace,SFMono-Regular,Menlo,monospace;padding:24px}
-    pre{max-width:78ch;white-space:pre-wrap;opacity:.86}
-  </style>
-</head>
-<body><pre>{$escaped}</pre></body>
-</html>
-HTML;
-    }
-    return $clean . "\n<!-- xlog live preview: partial html stream -->";
 }
 
 function validate_generated_html($html) {

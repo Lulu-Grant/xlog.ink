@@ -19,7 +19,7 @@ $allAppCopy = get_i18n()['app'];
   <meta property="og:title" content="<?php echo h($appCopy['pageTitle']); ?>">
   <meta property="og:description" content="<?php echo h($appCopy['ogDescription']); ?>">
   <meta property="og:image" content="/assets/og/cover.jpg">
-  <link rel="stylesheet" href="/css/page-ai.css?v=20260612v30">
+  <link rel="stylesheet" href="/css/page-ai.css?v=20260613v36">
   <link rel="icon" href="/favicon.ico">
   <?php if ($turnstileEnabled && $turnstileSiteKey !== ''): ?>
   <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
@@ -78,7 +78,7 @@ $allAppCopy = get_i18n()['app'];
 
       <form id="composer" class="composer">
         <textarea id="messageInput" rows="1" placeholder="<?php echo h($appCopy['composerPlaceholder']); ?>"></textarea>
-        <button type="submit" aria-label="<?php echo h($appCopy['send']); ?>">↵</button>
+        <button type="submit" aria-label="<?php echo h($appCopy['send']); ?>">↗</button>
       </form>
     </section>
 
@@ -88,6 +88,6 @@ $allAppCopy = get_i18n()['app'];
   window.XLOG_I18N = <?php echo json_encode($allAppCopy, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES); ?>;
   </script>
   <script src="/js/qrcode.min.js?v=1.4.4"></script>
-  <script src="/js/ai-app.js?v=20260612v33"></script>
+  <script src="/js/ai-app.js?v=20260613v38"></script>
 </body>
 </html>

@@ -6,7 +6,10 @@ require_method('POST');
 $locale = resolve_locale($_POST['locale'] ?? null);
 set_locale_cookie($locale);
 $sessionId = trim($_POST['session_id'] ?? '');
-$caption = trim($_POST['caption'] ?? '');
+$caption = trim((string)($_POST['caption'] ?? ''));
+if (mb_strlen($caption, 'UTF-8') > 200) {
+    $caption = mb_substr($caption, 0, 200, 'UTF-8');
+}
 $slot = normalize_image_slot($_POST['slot'] ?? '');
 if (!preg_match('/^[a-f0-9]{32}$/', $sessionId)) api_error('bad_session', 'Invalid session');
 $session = db_one('SELECT * FROM sessions WHERE id = ?', [$sessionId]);

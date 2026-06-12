@@ -6,7 +6,12 @@ $data = json_input();
 $locale = resolve_locale($data['locale'] ?? null);
 set_locale_cookie($locale);
 $sessionId = trim($data['session_id'] ?? '');
-$message = trim($data['message'] ?? '');
+$message = sanitize_user_chat_message($data['message'] ?? '');
+$messageTruncated = false;
+if (mb_strlen($message, 'UTF-8') > 4000) {
+    $message = mb_substr($message, 0, 4000, 'UTF-8');
+    $messageTruncated = true;
+}
 if (!preg_match('/^[a-f0-9]{32}$/', $sessionId)) api_error('bad_session', 'Invalid session');
 if ($message === '') api_error('empty_message', 'Message required');
 
@@ -35,6 +40,9 @@ $GLOBALS['xlog_chat_locale'] = $locale;
 $modelMessages = array_merge($modelMessages, truncate_messages_for_chat($history));
 
 sse_start();
+if ($messageTruncated) {
+    sse_event('notice', ['type' => 'input', 'message' => t('api', 'messageTruncated', $locale)]);
+}
 $assistant = '';
 $streamTail = '';
 $streamTailLimit = 64;
@@ -120,4 +128,11 @@ function strip_chat_action_markers($text) {
     $text = preg_replace('/\s*\[\[ACTION:[A-Z]+(?:\s+\w+=\S+)*\]\]\s*/u', '', (string)$text);
     $text = preg_replace('/\s*\[(?:READY|UPLOAD)\]\s*/u', '', $text);
     return $text;
+}
+
+function sanitize_user_chat_message($text) {
+    $text = trim((string)$text);
+    $text = preg_replace('/\s*\[\[ACTION:[A-Z]+(?:\s+\w+=\S+)*\]\]\s*/u', ' ', $text);
+    $text = preg_replace('/\s*\[(?:READY|UPLOAD)\]\s*/u', ' ', $text);
+    return trim(preg_replace('/[ \t]{2,}/u', ' ', $text));
 }
