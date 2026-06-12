@@ -78,7 +78,7 @@ $allAppCopy = get_i18n()['app'];
 
       <form id="composer" class="composer">
         <textarea id="messageInput" rows="1" placeholder="<?php echo h($appCopy['composerPlaceholder']); ?>"></textarea>
-        <button type="submit" aria-label="<?php echo h($appCopy['send']); ?>">⏎</button>
+        <button type="submit" aria-label="<?php echo h($appCopy['send']); ?>">↵</button>
       </form>
     </section>
 

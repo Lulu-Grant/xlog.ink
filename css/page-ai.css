@@ -755,7 +755,7 @@ button:disabled { cursor: default; opacity: .45; }
 .composer::after {
   content: "";
   position: absolute;
-  left: 34px;
+  left: 36px;
   top: 50%;
   margin-top: -8px;
   width: 8px;
@@ -792,7 +792,7 @@ textarea {
 }
 .composer textarea {
   border: 0;
-  padding: 8px 4px;
+  padding: 8px 4px 8px 16px;
 }
 input:focus, textarea:focus { border-color: var(--acc); }
 .composer textarea:focus { border-color: transparent; }
@@ -873,6 +873,7 @@ input:focus, textarea:focus { border-color: var(--acc); }
   background: var(--acc);
   color: var(--panel);
   font-weight: 700;
+  font-size: 15px;
 }
 .composer button:hover:not(:disabled) {
   background: var(--acc-deep);
@@ -987,7 +988,9 @@ input:focus, textarea:focus { border-color: var(--acc); }
     overflow-x: auto;
     flex-wrap: nowrap;
     padding-right: 16px;
+    scrollbar-width: none;
   }
+  .preset-row::-webkit-scrollbar { display: none; }
   .preset-row button {
     flex: 0 0 auto;
   }
