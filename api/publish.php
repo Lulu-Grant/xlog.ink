@@ -7,6 +7,7 @@ require_once __DIR__ . '/../includes/turnstile.php';
 
 @set_time_limit(300);
 @ini_set('max_execution_time', '300');
+@ignore_user_abort(true);
 
 require_method('POST');
 $data = json_input();
@@ -14,12 +15,14 @@ $sessionId = trim($data['session_id'] ?? '');
 if (!preg_match('/^[a-f0-9]{32}$/', $sessionId)) api_error('bad_session', 'Invalid session');
 $session = db_one('SELECT * FROM sessions WHERE id = ?', [$sessionId]);
 if (!$session) api_error('session_not_found', 'Session not found', 404);
+if (!session_access_allowed($session)) api_error('forbidden_session', '你不能发布这个会话。', 403);
 if (!current_user_id()) xlog_cookie_id();
 
 sse_start();
 $quotaCharge = null;
 $editPage = null;
 $editMode = $session['edit_mode'] ?? '';
+$usage = [];
 try {
     if (!api_turnstile_ok($data['turnstile_token'] ?? '')) {
         record_publish_event($sessionId, null, 'generate', 'failed', 'turnstile_failed');
@@ -98,7 +101,7 @@ try {
     validate_generated_html($html);
     $pageSlug = $editPage ? $session['page_slug'] : generate_unique_slug();
     $html = move_session_assets_to_slug($sessionId, $pageSlug, $html);
-    $isAdult = ($editPage && !empty($editPage['is_adult'])) || !empty($data['is_adult']) || conversation_indicates_adult($messages);
+    $isAdult = !empty($data['is_adult']);
     if ($isAdult) {
         $html = inject_adult_gate($html, $pageSlug);
     }
@@ -114,14 +117,15 @@ try {
 
     $title = extract_title($html) ?: 'AI Page';
     $type = infer_page_type($messages);
+    $lang = extract_html_lang($html) ?: 'zh-CN';
     $now = now_iso();
     $cost = (int)(($usage['input_tokens'] ?? 0) + ($usage['output_tokens'] ?? 0));
     if (db_one('SELECT slug FROM pages WHERE slug = ?', [$pageSlug])) {
-        db_exec('UPDATE pages SET title = ?, type = ?, updated_at = ?, cost_tokens = ?, session_id = ?, html_path = ?, is_adult = ? WHERE slug = ?', [$title, $type, $now, $cost, $sessionId, $path, $isAdult ? 1 : 0, $pageSlug]);
+        db_exec('UPDATE pages SET title = ?, type = ?, lang = ?, updated_at = ?, cost_tokens = ?, session_id = ?, html_path = ?, is_adult = ? WHERE slug = ?', [$title, $type, $lang, $now, $cost, $sessionId, $path, $isAdult ? 1 : 0, $pageSlug]);
     } else {
         db_exec(
             'INSERT INTO pages (slug, title, type, lang, created_at, owner_user_id, status, cost_tokens, session_id, html_path, is_adult) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-            [$pageSlug, $title, $type, 'zh-CN', $now, current_user_id(), 'live', $cost, $sessionId, $path, $isAdult ? 1 : 0]
+            [$pageSlug, $title, $type, $lang, $now, current_user_id(), 'live', $cost, $sessionId, $path, $isAdult ? 1 : 0]
         );
     }
     db_exec('UPDATE sessions SET page_slug = ?, state = ?, updated_at = ? WHERE id = ?', [$pageSlug, 'done', $now, $sessionId]);
@@ -134,13 +138,15 @@ try {
     }
 
     $url = 'https://' . $pageSlug . '.xlog.ink/';
+    append_session_message($sessionId, 'system', '[系统事件] 页面已发布：' . $url . '。标题《' . $title . '》。如果用户继续要求修改，默认是修改这个页面；如果用户明确说“重新做一个/再生成一个/新页面”，则进入下一次发布流程。');
     sse_event('stage', ['stage' => 'done']);
-    sse_event('result', ['url' => $url, 'slug' => $pageSlug, 'qr_payload' => $url]);
+    sse_event('result', ['url' => $url, 'slug' => $pageSlug, 'qr_payload' => $url, 'is_adult' => $isAdult]);
     sse_event('done', ['usage' => $usage]);
 } catch (Throwable $e) {
     refund_generate_charge($quotaCharge);
-    record_publish_event($sessionId ?? null, isset($session) ? ($session['page_slug'] ?: null) : null, 'generate', 'failed', $e->getMessage(), $usage ?? []);
-    sse_event('error', ['code' => 'publish_failed', 'message' => $e->getMessage()]);
+    record_publish_event($sessionId ?? null, isset($session) ? ($session['page_slug'] ?: null) : null, 'generate', 'failed', $e->getMessage(), $usage);
+    error_log('publish failed: ' . $e->getMessage());
+    sse_event('error', ['code' => 'publish_failed', 'message' => friendly_publish_error($e)]);
 }
 
 function refund_generate_charge(&$charge) {
@@ -283,24 +289,38 @@ function adult_gate_inline_css() {
 HTML;
 }
 
-function conversation_indicates_adult(array $messages) {
-    $text = mb_strtolower(json_encode($messages, JSON_UNESCAPED_UNICODE), 'UTF-8');
-    foreach (['18+', '成人', '色情', 'nsfw', 'adult'] as $needle) {
-        if (strpos($text, $needle) !== false) return true;
-    }
-    return false;
-}
-
 function extract_title($html) {
     return preg_match('/<title[^>]*>(.*?)<\/title>/is', $html, $m) ? trim(html_entity_decode(strip_tags($m[1]), ENT_QUOTES, 'UTF-8')) : '';
 }
 
+function extract_html_lang($html) {
+    if (!preg_match('/<html\b[^>]*\blang=["\']?([a-z]{2,3}(?:-[a-z0-9]+)?)/i', $html, $m)) {
+        return '';
+    }
+    return strtolower($m[1]);
+}
+
 function infer_page_type(array $messages) {
-    $text = mb_strtolower(json_encode($messages, JSON_UNESCAPED_UNICODE), 'UTF-8');
-    foreach (['card' => '名片', 'poster' => '宣传', 'article' => '文章', 'event' => '活动'] as $type => $needle) {
-        if (strpos($text, $needle) !== false || strpos($text, $type) !== false) return $type;
+    foreach ($messages as $message) {
+        if (($message['role'] ?? '') !== 'user') continue;
+        $text = mb_strtolower((string)($message['content'] ?? ''), 'UTF-8');
+        if (preg_match('/(名片|个人主页|个人介绍|联系卡|business\s*card)/iu', $text)) return 'card';
+        if (preg_match('/(宣传海报|海报页|产品宣传|服务宣传|poster|promo)/iu', $text)) return 'poster';
+        if (preg_match('/(文章页面|文章页|长文|博客|article|blog)/iu', $text)) return 'article';
+        if (preg_match('/(活动页面|活动页|报名页|发布会|沙龙|节日活动|event)/iu', $text)) return 'event';
     }
     return 'free';
+}
+
+function friendly_publish_error(Throwable $e) {
+    $message = $e->getMessage();
+    if (stripos($message, 'External scripts') !== false) return '页面里包含外链脚本，已被安全策略拒绝。请让 AI 重新生成纯内联页面。';
+    if (stripos($message, 'External stylesheets') !== false) return '页面里包含外链样式表，已被安全策略拒绝。请让 AI 重新生成纯内联样式。';
+    if (stripos($message, 'Only xlog.ink site-assets') !== false) return '页面引用了非本站图片，已被安全策略拒绝。请重新生成或先上传图片。';
+    if (stripos($message, 'iframes') !== false || stripos($message, 'forms') !== false) return '页面包含 iframe 或表单，暂不允许发布。请换一种静态展示方式。';
+    if (stripos($message, 'complete HTML') !== false || stripos($message, 'DOCTYPE') !== false) return '模型没有返回完整 HTML，额度已退回。请再试一次或减少页面复杂度。';
+    if (stripos($message, 'Write failed') !== false) return '页面文件写入失败，额度已退回。请稍后重试。';
+    return '生成失败，额度已退回。请稍后重试，或减少页面内容后再生成。';
 }
 
 function record_publish_event($sessionId, $slug, $kind, $status, $message = null, array $usage = [], $isAdult = false) {

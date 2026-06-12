@@ -15,6 +15,12 @@ $todayCount = db_one('SELECT COUNT(*) AS c FROM login_codes WHERE email = ? AND 
 if ($todayCount && (int)$todayCount['c'] >= 10) {
     api_error('daily_limit', '今日验证码发送次数已达上限', 429);
 }
+$ipKey = 'ip:' . client_ip();
+$ipEventKey = mail_event_key($ipKey);
+$ipCount = db_one('SELECT COUNT(*) AS c FROM mail_events WHERE kind = ? AND event_key = ? AND substr(created_at, 1, 10) = ?', ['login-code-ip', $ipEventKey, utc_date()]);
+if ($ipCount && (int)$ipCount['c'] >= 30) {
+    api_error('ip_daily_limit', '当前网络今日验证码发送次数已达上限', 429);
+}
 
 $code = (string)random_int(100000, 999999);
 $hash = password_hash($code, PASSWORD_DEFAULT);
@@ -22,6 +28,7 @@ db_exec('INSERT INTO login_codes (email, code_hash, expires_at, attempts, create
 try {
     send_mail_template($email, 'login-code', ['code' => $code]);
     record_mail_event('login-code', $email);
+    record_mail_event('login-code-ip', $ipKey);
 } catch (Throwable $e) {
     db_exec('DELETE FROM login_codes WHERE email = ? AND code_hash = ?', [$email, $hash]);
     api_error('mail_failed', '验证码邮件发送失败，请稍后重试。', 502);

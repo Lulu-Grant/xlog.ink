@@ -4,6 +4,8 @@
     busy: false,
     lastUrl: '',
     user: null,
+    currentPage: null,
+    currentPageIsAdult: false,
     readyShown: false,
     publishCard: null,
     previewCard: null,
@@ -11,6 +13,7 @@
     awaitingEmail: false,
     pendingAutoPublish: null,
   };
+  var SESSION_STORAGE_KEY = 'xlog:lastSessionId';
 
   var $ = function (s) { return document.querySelector(s); };
   var messages = $('#messages');
@@ -111,7 +114,7 @@
       '<div class="action-title">生成前确认</div>' +
       '<p>确认后会调用生成模型并发布到专属二级域名。生成期间请保持当前窗口打开。</p>' +
       '<label class="adult-toggle">' +
-      '<input class="inline-adult-checkbox" type="checkbox">' +
+      '<input class="inline-adult-checkbox" type="checkbox"' + (state.currentPageIsAdult ? ' checked' : '') + '>' +
       '<span>此页面包含 18+ 成人内容，发布后先显示确认页</span>' +
       '</label>' +
       turnstile +
@@ -178,6 +181,7 @@
         '<button type="button" data-copy-url="1">复制链接</button>' +
         '<button type="button" data-download-qr="1">下载二维码</button>' +
         '<a data-open-page="1" href="#" target="_blank" rel="noopener">打开页面</a>' +
+        '</div>' +
         '</div>' +
         '</div>');
     }
@@ -280,12 +284,19 @@
     return url + (url.indexOf('?') === -1 ? '?' : '&') + 't=' + Date.now();
   }
 
-  function handleAction(action) {
+  function isPublishIntent(text) {
+    return /(直接|立即|现在|确认|可以|重新|再次|再|开始)?\s*(生成|发布|上线|创建页面|开始生成|开始做|重新生成|再做一个)/.test(text || '');
+  }
+
+  function handleAction(action, userPublishIntent) {
     if (!action || !action.type) return;
     var params = action.params || {};
     if (action.type === 'upload') addUploadCard(params);
     else if (action.type === 'ready') showGenerateCard(params.reason || '信息已经足够。');
-    else if (action.type === 'publish') state.pendingAutoPublish = params;
+    else if (action.type === 'publish') {
+      if (userPublishIntent) state.pendingAutoPublish = params;
+      else showGenerateCard(params.reason || 'AI 认为信息接近完整，请你确认后再生成。');
+    }
     else if (action.type === 'email') showEmailCard();
   }
 
@@ -298,7 +309,7 @@
       return;
     }
     addMessage('system', params.reason ? '已确认生成：' + params.reason : '已确认生成，正在开始发布。');
-    publish({ isAdult: false });
+    publish({ isAdult: state.currentPageIsAdult });
   }
 
   function addUploadCard(params) {
@@ -376,23 +387,98 @@
     }).then(function (r) { return r.json(); });
   }
 
+  function rememberSession(sessionId) {
+    if (!sessionId) return;
+    try { window.sessionStorage.setItem(SESSION_STORAGE_KEY, sessionId); } catch (e) {}
+  }
+
+  function forgetSession() {
+    try { window.sessionStorage.removeItem(SESSION_STORAGE_KEY); } catch (e) {}
+  }
+
+  function storedSessionId() {
+    try {
+      var id = window.sessionStorage.getItem(SESSION_STORAGE_KEY) || '';
+      return /^[a-f0-9]{32}$/.test(id) ? id : '';
+    } catch (e) {
+      return '';
+    }
+  }
+
+  function renderStoredMessage(message) {
+    var role = message.role || 'assistant';
+    var content = message.content || '';
+    if (role === 'system' && content.indexOf('[系统事件]') === 0) return;
+    if (role === 'user' && content.indexOf('[当前页面信息]') === 0) return;
+    if (role === 'user' && content.indexOf('[图片已上传:') === 0) return;
+    addMessage(role === 'user' ? 'user' : (role === 'system' ? 'system' : 'assistant'), content);
+  }
+
+  function applySessionPayload(data, fresh) {
+    if (!data || data.error || !data.session_id) {
+      if (data && data.error && data.error.code === 'session_not_found') forgetSession();
+      throw new Error(data && data.error ? data.error.message : 'session_failed');
+    }
+    state.sessionId = data.session_id;
+    rememberSession(state.sessionId);
+    setQuota(data.quota);
+    state.currentPage = data.page || null;
+    state.currentPageIsAdult = !!(data.page && data.page.is_adult);
+    state.lastUrl = data.page && data.page.url ? data.page.url : '';
+    state.awaitingEmail = false;
+    state.pendingAutoPublish = null;
+    messages.innerHTML = '';
+    state.readyShown = false;
+    state.publishCard = null;
+    state.previewCard = null;
+    if (state.previewTimer) clearInterval(state.previewTimer);
+    state.previewTimer = null;
+
+    if (data.messages && data.messages.length) {
+      messages.classList.remove('is-hero');
+      input.placeholder = '继续描述你的页面...';
+      data.messages.forEach(renderStoredMessage);
+    } else {
+      messages.classList.add('is-hero');
+      input.placeholder = '一句话描述你想要的页面…';
+      addMessage('assistant', data.greeting || '你想创建什么类型的页面？可以选择名片、宣传海报、文章页面、活动页面，或者直接自由描述。');
+      renderPresetCard();
+    }
+
+    if (data.page && data.page.url) {
+      finalizeLivePreview(data.page.url);
+      if (data.edit_mode) {
+        addMessage('system', '当前正在修改已有页面，下一次生成会覆盖原地址。');
+      }
+    } else if (data.edit_mode && fresh) {
+      addMessage('assistant', '已进入修改模式。告诉我你想调整哪里，完成后点击生成会覆盖原页面。');
+    }
+  }
+
+  function createFreshSession() {
+    return api('/api/session.php', {}).then(function (data) {
+      applySessionPayload(data, true);
+    });
+  }
+
   function start() {
     api('/api/auth/me.php', {}).then(function (me) {
       setUser(me.user);
       setQuota(me.quota);
     }).catch(function () { setUser(null); });
-    if (state.sessionId) {
-      addMessage('assistant', '已进入修改模式。告诉我你想调整哪里，完成后点击生成会覆盖原页面。');
+    var resumeId = state.sessionId || storedSessionId();
+    if (resumeId) {
+      api('/api/session.php', { session_id: resumeId }).then(function (data) {
+        applySessionPayload(data, false);
+      }).catch(function () {
+        forgetSession();
+        return createFreshSession();
+      }).catch(function () {
+        addMessage('system', '会话创建失败，请稍后刷新重试。');
+      });
       return;
     }
-    api('/api/session.php', {}).then(function (data) {
-      state.sessionId = data.session_id;
-      setQuota(data.quota);
-      messages.classList.add('is-hero');
-      input.placeholder = '一句话描述你想要的页面…';
-      addMessage('assistant', data.greeting);
-      renderPresetCard();
-    }).catch(function () {
+    createFreshSession().catch(function () {
       addMessage('system', '会话创建失败，请稍后刷新重试。');
     });
   }
@@ -430,7 +516,7 @@
       messages.classList.remove('is-hero');
       input.placeholder = '继续描述你的页面...';
     }
-    var publishIntent = /(直接)?(重新)?(生成|发布|上线|创建页面|开始生成|开始做)/.test(text);
+    var publishIntent = isPublishIntent(text);
     if (state.awaitingEmail) {
       var contextualEmail = extractEmail(text);
       var skipEmailIntent = /(不(用|要|留|绑定)|暂不|跳过|算了|不用了|不要了)/.test(text);
@@ -471,7 +557,7 @@
           ai.textContent += d.text || '';
           scrollDown(false);
         },
-        action: handleAction,
+        action: function (d) { handleAction(d, publishIntent); },
         notice: function (d) { addMessage('system', d.message || '系统提醒'); },
         error: function (d) { addMessage('system', d.message || 'AI 对话失败'); }
       });
@@ -493,7 +579,7 @@
     setBusy(true);
     state.lastUrl = '';
     var publishTerminal = false;
-    addMessage('system', '开始生成页面，请保持当前窗口打开。');
+    var progress = addMessage('system', '开始生成页面，请保持当前窗口打开。');
     startGenerationPreview();
     var turnstileToken = '';
     if (document.body.dataset.turnstileEnabled === '1') {
@@ -523,7 +609,6 @@
     }).then(function (r) {
       var generatedChars = 0;
       var lastProgressAt = 0;
-      var progress = addMessage('system', 'AI 正在生成页面结构与样式...');
       return readSse(r, {
         stage: function (d) {
           progress.textContent = d.stage === 'writing' ? '正在写入页面文件...' : (d.stage === 'done' ? '页面写入完成。' : '阶段：' + d.stage);
@@ -552,6 +637,8 @@
         result: function (d) {
           publishTerminal = true;
           state.lastUrl = d.url;
+          state.currentPage = { url: d.url, slug: d.slug || '', is_adult: !!d.is_adult };
+          state.currentPageIsAdult = !!d.is_adult;
           state.readyShown = false;
           state.publishCard = null;
           finalizeLivePreview(d.url);
@@ -575,10 +662,6 @@
       setBusy(false);
       state.publishCard = null;
     });
-  }
-
-  function renderDelivery(url) {
-    finalizeLivePreview(url);
   }
 
   function showEmailCard() {
@@ -675,12 +758,15 @@
         return;
       }
       state.sessionId = r.session_id;
-      state.lastUrl = '';
-      $('#messages').innerHTML = '';
-      state.readyShown = false;
-      state.publishCard = null;
       toggleMyPages(false);
-      addMessage('assistant', '已进入修改模式。告诉我你想调整哪里，完成后点击生成会覆盖原页面。');
+      api('/api/session.php', { session_id: state.sessionId }).then(function (data) {
+        applySessionPayload(data, false);
+      }).catch(function () {
+        $('#messages').innerHTML = '';
+        state.readyShown = false;
+        state.publishCard = null;
+        addMessage('assistant', '已进入修改模式。告诉我你想调整哪里，完成后点击生成会覆盖原页面。');
+      });
     });
   }
 

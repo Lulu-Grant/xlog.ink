@@ -63,6 +63,7 @@ CREATE TABLE IF NOT EXISTS sessions (
     messages TEXT NOT NULL DEFAULT '[]',
     state TEXT NOT NULL DEFAULT 'chatting',
     ip TEXT NOT NULL,
+    client_id TEXT DEFAULT '',
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL
 );
@@ -127,6 +128,7 @@ CREATE TABLE IF NOT EXISTS mail_events (
 CREATE INDEX IF NOT EXISTS idx_mail_events_lookup ON mail_events(kind, event_key, created_at);
 ");
     db_ensure_column($pdo, 'sessions', 'edit_mode', "TEXT NOT NULL DEFAULT ''");
+    db_ensure_column($pdo, 'sessions', 'client_id', "TEXT DEFAULT ''");
     db_ensure_column($pdo, 'images', 'slot', "TEXT DEFAULT ''");
 }
 
@@ -181,12 +183,27 @@ function append_session_message($sessionId, $role, $content) {
     return true;
 }
 
+function session_access_allowed(array $session) {
+    if (!empty($session['user_id'])) {
+        $userId = current_user_id();
+        return $userId && (int)$session['user_id'] === (int)$userId;
+    }
+
+    $clientId = xlog_cookie_id();
+    if (!empty($session['client_id'])) {
+        return hash_equals((string)$session['client_id'], $clientId);
+    }
+
+    return empty($session['user_id']) && hash_equals((string)($session['ip'] ?? ''), client_ip());
+}
+
 function create_session($pageSlug = null, array $seedMessages = [], $editMode = '') {
     $id = bin2hex(random_bytes(16));
     $now = now_iso();
+    $clientId = xlog_cookie_id();
     db_exec(
-        'INSERT INTO sessions (id, user_id, page_slug, edit_mode, messages, state, ip, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
-        [$id, current_user_id(), $pageSlug, $editMode, json_encode($seedMessages, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES), 'chatting', client_ip(), $now, $now]
+        'INSERT INTO sessions (id, user_id, page_slug, edit_mode, messages, state, ip, client_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        [$id, current_user_id(), $pageSlug, $editMode, json_encode($seedMessages, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES), 'chatting', client_ip(), $clientId, $now, $now]
     );
     return $id;
 }

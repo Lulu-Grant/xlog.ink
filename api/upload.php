@@ -9,7 +9,7 @@ $slot = normalize_image_slot($_POST['slot'] ?? '');
 if (!preg_match('/^[a-f0-9]{32}$/', $sessionId)) api_error('bad_session', 'Invalid session');
 $session = db_one('SELECT * FROM sessions WHERE id = ?', [$sessionId]);
 if (!$session) api_error('session_not_found', 'Session not found', 404);
-if (!upload_session_allowed($session)) api_error('forbidden_session', '你不能向这个会话上传图片。', 403);
+if (!session_access_allowed($session)) api_error('forbidden_session', '你不能向这个会话上传图片。', 403);
 if (empty($_FILES['file'])) api_error('missing_file', 'No file uploaded');
 
 $charge = consume_quota('upload_image');
@@ -24,14 +24,6 @@ try {
 } catch (Throwable $e) {
     refund_quota('upload_image', $charge);
     api_error('upload_failed', $e->getMessage(), 400);
-}
-
-function upload_session_allowed(array $session) {
-    if (!empty($session['user_id'])) {
-        $userId = current_user_id();
-        return $userId && (int)$session['user_id'] === (int)$userId;
-    }
-    return empty($session['user_id']) && hash_equals((string)$session['ip'], client_ip());
 }
 
 function normalize_image_slot($slot) {

@@ -62,6 +62,7 @@ V2 现有代码中，"什么时候浮现什么 UI" 由两套脆弱机制决定�
 |---|---|---|---|
 | `UPLOAD` | 图片上传卡 | `slot`（hero/avatar/product/gallery）、`hint`（用途提示词） | 上传卡预填说明；`slot` 随图片存库，透传给生成模型 |
 | `READY` | 生成确认卡 | `reason`（一句话总结为何已就绪） | 确认卡文案 |
+| `PUBLISH` | 直接进入发布前确认/自动发布链路 | `reason` | 仅在用户当前轮明确授权生成时生效；前端还会做用户语义二次确认 |
 | `EMAIL` | 邮箱绑定卡 | — | 发布后引导留邮箱（替代现在写死在 result 回调里的话术触发） |
 
 扩展规则：新增动作 = 在此表加一行 + 前端加一个渲染分支 + prompt 加一条说明。不需要动协议本身。
@@ -71,6 +72,7 @@ V2 现有代码中，"什么时候浮现什么 UI" 由两套脆弱机制决定�
 标记是模型的**建议**，不是指令：
 
 - `READY` 标记只浮出确认卡；真正生成仍由用户点击 + 后端额度/Turnstile 裁决（现有架构不变）；
+- `PUBLISH` 标记必须同时满足“模型建议发布”和“用户当前消息包含明确生成/发布意图”，否则降级为确认卡；
 - `UPLOAD` 标记只浮出上传卡；上传量限制仍由后端 per-session 上限管控；
 - 模型乱打标记的最坏后果是多浮一张卡，不会产生越权动作。
 
@@ -90,11 +92,11 @@ V2 现有代码中，"什么时候浮现什么 UI" 由两套脆弱机制决定�
 ```php
 // 流结束后
 if (preg_match('/\[\[ACTION:([A-Z]+)((?:\s+\w+=\S+)*)\]\]\s*$/u', $assistant, $m)) {
-    $action = $m[1];                       // UPLOAD | READY | EMAIL
+    $action = $m[1];                       // UPLOAD | READY | PUBLISH | EMAIL
     $params = parse_action_params($m[2]);  // ['slot' => 'hero', ...]
     $clean  = preg_replace('/\s*\[\[ACTION:[^\]]*\]\]\s*$/u', '', $assistant);
     // 白名单校验：未知 TYPE 一律忽略（只剥离不转发）
-    if (in_array($action, ['UPLOAD', 'READY', 'EMAIL'], true)) {
+    if (in_array($action, ['UPLOAD', 'READY', 'PUBLISH', 'EMAIL'], true)) {
         if ($action === 'READY') {
             db_exec('UPDATE sessions SET state=?, updated_at=? WHERE id=?', ['ready', now_iso(), $sessionId]);
         }
@@ -116,6 +118,7 @@ if (preg_match('/\[\[ACTION:([A-Z]+)((?:\s+\w+=\S+)*)\]\]\s*$/u', $assistant, $m
 action: function (d) {
   if (d.type === 'upload') addUploadCard(d.params);   // params.hint 预填说明输入框
   if (d.type === 'ready')  showGenerateCard(d.params.reason || '信息已经足够。');
+  if (d.type === 'publish') handlePublishAction(d.params); // 仍需用户当前消息有生成语义
   if (d.type === 'email')  showEmailCard();           // 从 renderDelivery 中拆出复用
 }
 ```
@@ -158,7 +161,7 @@ action: function (d) {
 |---|---|---|
 | 1 | chat.php 流尾缓冲 + `action` 事件 + 旧 `[READY]` 兼容 | 标记任何拆包方式下前端都看不到原文；`ready` 行为与现状等价 |
 | 2 | chat-system.txt 协议 + few-shot；用 mock 与真实 gemma 各跑一遍 | 10 轮典型对话中标记出现位置与格式全部合规 |
-| 3 | ai-app.js 动作分发，删除 `maybeShowUploadCard` 与前端剥离逻辑 | 上传卡仅在收到 `action:upload` 时出现且预填 hint；生成卡双路径（标记/用户意图）都工作 |
+| 3 | ai-app.js 动作分发，删除 `maybeShowUploadCard` 与前端剥离逻辑 | 上传卡仅在收到 `action:upload` 时出现且预填 hint；生成卡双路径（标记/用户意图）都工作；`PUBLISH` 必须通过用户语义二次确认 |
 | 4 | images.slot 列 + 上传链路 + 生成清单透传 | 生成请求的图片清单 JSON 中可见 slot 字段 |
 | 5 | EMAIL 动作接入发布后流程 | 发布成功后邮箱卡由 `action:email` 或前端确定性逻辑浮现，二选一兜底 |
 
@@ -175,4 +178,5 @@ action: function (d) {
 | 路由分层 | 语义路由（模型标记）+ 确定性路由（前端事件），两层均无独立模型 | 用户物理操作不应经过任何模型 |
 | 标记剥离责任 | 后端流尾缓冲，前端永不接触标记原文 | 顺带修复 `[READY]` 拆包闪烁 |
 | 标记的权限性质 | 仅为建议；生成/上传的真实裁决在后端额度与 Turnstile | 模型乱打标记最坏只是多浮一张卡 |
+| PUBLISH 自动生成门槛 | 模型 `PUBLISH` + 用户当前轮明确生成语义 | 解决“光说不练”，同时避免模型单方面烧额度 |
 | 重新引入前置模型的条件 | 出现"不能等会话模型说完整句"的实时拦截分流需求时再评估 | 当前无此需求 |

@@ -10,6 +10,7 @@ if ($message === '') api_error('empty_message', 'Message required');
 
 $row = db_one('SELECT * FROM sessions WHERE id = ?', [$sessionId]);
 if (!$row) api_error('session_not_found', 'Session not found', 404);
+if (!session_access_allowed($row)) api_error('forbidden_session', '你不能使用这个会话。', 403);
 
 $q = consume_quota('chat_turn');
 if (!$q['ok']) {
@@ -29,7 +30,7 @@ $modelMessages = array_merge($modelMessages, truncate_messages_for_chat($history
 sse_start();
 $assistant = '';
 $streamTail = '';
-$streamTailLimit = 160;
+$streamTailLimit = 64;
 try {
     $usage = ai_stream_chat($modelMessages, function ($delta) use (&$assistant, &$streamTail, $streamTailLimit) {
         $assistant .= $delta;
@@ -59,12 +60,17 @@ try {
 
 function truncate_messages_for_chat(array $messages) {
     if (count($messages) <= 30) {
-        return array_map(fn($m) => ['role' => $m['role'], 'content' => $m['content']], $messages);
+        return array_map('chat_model_message', $messages);
     }
     $first = array_slice($messages, 0, 2);
     $last = array_slice($messages, -20);
     $middle = [['role' => 'assistant', 'content' => '（中间较早对话已省略，继续基于最近上下文引导用户。）']];
-    return array_map(fn($m) => ['role' => $m['role'], 'content' => $m['content']], array_merge($first, $middle, $last));
+    return array_map('chat_model_message', array_merge($first, $middle, $last));
+}
+
+function chat_model_message(array $m) {
+    $role = ($m['role'] ?? '') === 'user' ? 'user' : 'assistant';
+    return ['role' => $role, 'content' => (string)($m['content'] ?? '')];
 }
 
 function extract_chat_action($text) {
@@ -103,7 +109,7 @@ function parse_action_params($raw) {
 }
 
 function strip_chat_action_markers($text) {
-    $text = preg_replace('/(?:\n?\s*\[\[ACTION:[^\]]*\]\]\s*)+$/u', '', (string)$text);
-    $text = preg_replace('/(?:\n?\s*\[(?:READY|UPLOAD)\]\s*)+$/u', '', $text);
+    $text = preg_replace('/\s*\[\[ACTION:[A-Z]+(?:\s+\w+=\S+)*\]\]\s*/u', '', (string)$text);
+    $text = preg_replace('/\s*\[(?:READY|UPLOAD)\]\s*/u', '', $text);
     return $text;
 }

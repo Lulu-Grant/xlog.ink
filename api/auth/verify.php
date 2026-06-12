@@ -23,5 +23,6 @@ if (!$user) {
     db_exec('INSERT INTO users (email, created_at) VALUES (?, ?)', [$email, now_iso()]);
     $user = db_one('SELECT * FROM users WHERE email = ?', [$email]);
 }
+session_regenerate_id(true);
 $_SESSION['user_id'] = (int)$user['id'];
 api_json(['user' => ['id' => (int)$user['id'], 'email' => $user['email'], 'daily_quota' => (int)$user['daily_quota'], 'credits' => (int)$user['credits']]]);

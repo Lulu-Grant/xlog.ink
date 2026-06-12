@@ -84,6 +84,9 @@ function image_with_gd($src, $mime, $out) {
     elseif ($mime === 'image/webp') $im = imagecreatefromwebp($src);
     else $im = imagecreatefromgif($src);
     if (!$im) throw new RuntimeException('Could not decode image');
+    if ($mime === 'image/jpeg') {
+        $im = gd_apply_exif_orientation($im, $src);
+    }
     $w = imagesx($im);
     $h = imagesy($im);
     $scale = min(1, 1600 / max($w, $h));
@@ -94,7 +97,27 @@ function image_with_gd($src, $mime, $out) {
     imagesavealpha($dst, true);
     imagecopyresampled($dst, $im, 0, 0, 0, 0, $nw, $nh, $w, $h);
     imagewebp($dst, $out, 80);
+    imagedestroy($im);
+    imagedestroy($dst);
     return [$nw, $nh];
+}
+
+function gd_apply_exif_orientation($im, $src) {
+    if (!function_exists('exif_read_data')) return $im;
+    $exif = @exif_read_data($src);
+    $orientation = (int)($exif['Orientation'] ?? 1);
+    if ($orientation === 2 && function_exists('imageflip')) {
+        imageflip($im, IMG_FLIP_HORIZONTAL);
+    } elseif ($orientation === 3) {
+        $im = imagerotate($im, 180, 0);
+    } elseif ($orientation === 4 && function_exists('imageflip')) {
+        imageflip($im, IMG_FLIP_VERTICAL);
+    } elseif ($orientation === 6) {
+        $im = imagerotate($im, -90, 0);
+    } elseif ($orientation === 8) {
+        $im = imagerotate($im, 90, 0);
+    }
+    return $im;
 }
 
 function move_session_assets_to_slug($sessionId, $slug, $html) {
