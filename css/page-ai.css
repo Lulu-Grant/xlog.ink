@@ -381,7 +381,7 @@ button:disabled { cursor: default; opacity: .45; }
 .msg.assistant::before {
   content: "";
   display: inline-block;
-  width: 48px;
+  width: 42px;
   height: 14px;
   margin-right: 7px;
   background: url("/assets/brand/xlog-prefix.svg") left 50% / contain no-repeat;
