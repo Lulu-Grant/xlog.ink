@@ -8,10 +8,10 @@ function normalize_email($email) {
     return filter_var($email, FILTER_VALIDATE_EMAIL) ? $email : '';
 }
 
-function send_mail_template($to, $template, array $vars) {
+function send_mail_template($to, $template, array $vars, $locale = null) {
     $to = normalize_email($to);
     if ($to === '') throw new RuntimeException('Invalid email');
-    [$subject, $body] = mail_render_template($template, $vars);
+    [$subject, $body] = mail_render_template($template, $vars, $locale);
     return send_plain_mail($to, $subject, $body);
 }
 
@@ -35,14 +35,25 @@ function record_mail_event($kind, $key) {
     );
 }
 
-function mail_render_template($template, array $vars) {
+function mail_render_template($template, array $vars, $locale = null) {
+    $locale = validate_lang($locale ?: resolve_locale());
+    $copy = localized_copy('mail', $locale);
     if ($template === 'login-code') {
-        return ['xlog.ink 通知', "xlog.ink 登录验证码\n\n验证码：{$vars['code']}\n\n5 分钟内有效。如果不是你本人操作，可以忽略这封邮件。"];
+        return [
+            $copy['noticeSubject'],
+            strtr($copy['loginBody'], ['{code}' => $vars['code'] ?? '']),
+        ];
     }
     if ($template === 'edit-link') {
-        return ['你的 xlog.ink 页面修改链接', "页面：{$vars['url']}\n\n修改链接：{$vars['edit_url']}\n\n请妥善保存。"];
+        return [
+            $copy['editSubject'],
+            strtr($copy['editBody'], [
+                '{url}' => $vars['url'] ?? '',
+                '{edit_url}' => $vars['edit_url'] ?? '',
+            ]),
+        ];
     }
-    return ['xlog.ink 通知', $vars['body'] ?? ''];
+    return [$copy['noticeSubject'], $vars['body'] ?? ''];
 }
 
 function send_plain_mail($to, $subject, $body) {

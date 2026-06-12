@@ -14,6 +14,8 @@
     pendingAutoPublish: null,
   };
   var SESSION_STORAGE_KEY = 'xlog:lastSessionId';
+  var locale = normalizeLocale(window.XLOG_LOCALE || document.body.dataset.locale || '');
+  var i18n = window.XLOG_I18N || {};
 
   var $ = function (s) { return document.querySelector(s); };
   var messages = $('#messages');
@@ -24,7 +26,7 @@
   var jumpBtn = document.createElement('button');
   jumpBtn.type = 'button';
   jumpBtn.className = 'jump-latest';
-  jumpBtn.textContent = '↓ 回到最新';
+  jumpBtn.textContent = t('backLatest');
   jumpBtn.hidden = true;
   document.querySelector('.chat-canvas').appendChild(jumpBtn);
   jumpBtn.addEventListener('click', function () { scrollDown(true); });
@@ -48,6 +50,26 @@
   function setBusy(busy) {
     state.busy = busy;
     if (sendBtn) sendBtn.disabled = busy;
+  }
+
+  function normalizeLocale(value) {
+    value = String(value || '').replace('_', '-');
+    if (value === 'zh-TW' || value === 'en') return value;
+    return 'zh-CN';
+  }
+
+  function t(key, vars) {
+    var copy = (i18n[locale] || i18n['zh-CN'] || {});
+    var text = copy[key] || (i18n['zh-CN'] && i18n['zh-CN'][key]) || key;
+    vars = vars || {};
+    Object.keys(vars).forEach(function (name) {
+      text = text.replace(new RegExp('\\{' + name + '\\}', 'g'), String(vars[name]));
+    });
+    return text;
+  }
+
+  function setLocaleCookie(nextLocale) {
+    document.cookie = 'xlog_locale=' + encodeURIComponent(nextLocale) + '; Max-Age=31536000; Path=/; SameSite=Lax';
   }
 
   function addMessage(role, text) {
@@ -79,13 +101,13 @@
   function renderPresetCard() {
     if (document.querySelector('.preset-card')) return;
     addActionCard('preset-card',
-      '<div class="action-title">先选一个方向，或者直接输入你的想法</div>' +
+      '<div class="action-title">' + escapeHtml(t('presetTitle')) + '</div>' +
       '<div class="preset-row" aria-label="Page type presets">' +
-      '<button data-prompt="我想创建一个个人名片页面，请引导我补充必要信息。">名片</button>' +
-      '<button data-prompt="我想创建一个产品或服务宣传海报页面，请帮我整理需求。">宣传海报</button>' +
-      '<button data-prompt="我想创建一篇文章页面，请问我需要哪些内容。">文章页面</button>' +
-      '<button data-prompt="我想创建一个活动页面，请引导我提供活动名称、时间、地址和联系方式。">活动页面</button>' +
-      '<button data-prompt="我想自由创建一个页面，我会直接描述。">自由描述</button>' +
+      '<button data-prompt="' + escapeAttr(t('promptCard')) + '">' + escapeHtml(t('presetCard')) + '</button>' +
+      '<button data-prompt="' + escapeAttr(t('promptPoster')) + '">' + escapeHtml(t('presetPoster')) + '</button>' +
+      '<button data-prompt="' + escapeAttr(t('promptArticle')) + '">' + escapeHtml(t('presetArticle')) + '</button>' +
+      '<button data-prompt="' + escapeAttr(t('promptEvent')) + '">' + escapeHtml(t('presetEvent')) + '</button>' +
+      '<button data-prompt="' + escapeAttr(t('promptFree')) + '">' + escapeHtml(t('presetFree')) + '</button>' +
       '</div>');
   }
 
@@ -101,10 +123,10 @@
     if (!state.sessionId || state.readyShown) return;
     state.readyShown = true;
     addActionCard('generate-card',
-      '<div class="action-title">现在可以生成页面</div>' +
-      '<p>' + escapeHtml(reason || '信息已经足够，也可以继续补充细节。') + '</p>' +
+      '<div class="action-title">' + escapeHtml(t('generateReadyTitle')) + '</div>' +
+      '<p>' + escapeHtml(reason || t('generateReadyBody')) + '</p>' +
       '<div class="inline-actions">' +
-      '<button type="button" class="publish-btn" data-open-publish="1">生成页面</button>' +
+      '<button type="button" class="publish-btn" data-open-publish="1">' + escapeHtml(t('generateButton')) + '</button>' +
       '</div>');
   }
 
@@ -119,16 +141,16 @@
       turnstile = '<div class="turnstile-box"><div class="inline-turnstile"></div></div>';
     }
     state.publishCard = addActionCard('publish-confirm-card',
-      '<div class="action-title">生成前确认</div>' +
-      '<p>确认后会调用生成模型并发布到专属二级域名。生成期间请保持当前窗口打开。</p>' +
+      '<div class="action-title">' + escapeHtml(t('publishConfirmTitle')) + '</div>' +
+      '<p>' + escapeHtml(t('publishConfirmBody')) + '</p>' +
       '<label class="adult-toggle">' +
       '<input class="inline-adult-checkbox" type="checkbox"' + (state.currentPageIsAdult ? ' checked' : '') + '>' +
-      '<span>此页面包含 18+ 成人内容，发布后先显示确认页</span>' +
+      '<span>' + escapeHtml(t('adultToggle')) + '</span>' +
       '</label>' +
       turnstile +
       '<div class="inline-actions">' +
-      '<button type="button" class="publish-btn" data-confirm-publish="1">确认生成</button>' +
-      '<button type="button" class="ghost-btn" data-continue-chat="1">继续补充</button>' +
+      '<button type="button" class="publish-btn" data-confirm-publish="1">' + escapeHtml(t('confirmGenerate')) + '</button>' +
+      '<button type="button" class="ghost-btn" data-continue-chat="1">' + escapeHtml(t('continueChat')) + '</button>' +
       '</div>');
     renderInlineTurnstile(state.publishCard);
   }
@@ -146,27 +168,11 @@
 
   function buildPreviewPlaceholder() {
     return '' +
-      '<div class="preview-placeholder" aria-label="页面生成中">' +
-      '<svg class="build-orbit-svg" viewBox="0 0 520 260" role="img" aria-hidden="true">' +
-      '<defs>' +
-      '<linearGradient id="buildGlow" x1="0%" x2="100%" y1="0%" y2="100%"><stop offset="0%" stop-color="#39ffb6"/><stop offset="50%" stop-color="#7c5cff"/><stop offset="100%" stop-color="#ffca6a"/></linearGradient>' +
-      '<filter id="softGlow" x="-40%" y="-40%" width="180%" height="180%"><feGaussianBlur stdDeviation="5" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter>' +
-      '</defs>' +
-      '<rect class="build-grid" x="22" y="18" width="476" height="224" rx="24"/>' +
-      '<path class="build-wire wire-a" d="M82 178 C134 70 246 78 286 128 S396 196 438 82"/>' +
-      '<path class="build-wire wire-b" d="M72 92 C142 152 204 164 260 112 S370 56 452 138"/>' +
-      '<g class="build-core" filter="url(#softGlow)">' +
-      '<circle cx="260" cy="130" r="42"/>' +
-      '<path d="M240 132h40M260 112v40M246 118l28 28M274 118l-28 28"/>' +
-      '</g>' +
-      '<g class="build-node node-a"><circle cx="86" cy="178" r="12"/><path d="M80 178h12"/></g>' +
-      '<g class="build-node node-b"><circle cx="438" cy="82" r="12"/><path d="M432 82h12"/></g>' +
-      '<g class="build-node node-c"><circle cx="452" cy="138" r="10"/><path d="M447 138h10"/></g>' +
-      '<rect class="build-scan" x="42" y="34" width="436" height="36" rx="18"/>' +
-      '</svg>' +
+      '<div class="preview-placeholder" aria-label="' + escapeAttr(t('previewAria')) + '">' +
+      '<img class="website-build-svg" src="/assets/brand/website-building-v2.svg" alt="" aria-hidden="true">' +
       '<div class="preview-placeholder-copy">' +
-      '<strong>正在把对话编译成页面</strong>' +
-      '<span>HTML 会一边生成一边流进预览窗。中途看到残缺、闪烁和错位都正常。</span>' +
+      '<strong>' + escapeHtml(t('previewTitle')) + '</strong>' +
+      '<span>' + escapeHtml(t('previewBody')) + '</span>' +
       '</div>' +
       '</div>';
   }
@@ -176,48 +182,25 @@
       state.previewCard = addActionCard('live-preview-card',
         '<div class="live-preview-head">' +
         '<div><span class="live-dot"></span><strong>Page Forge Stream</strong></div>' +
-        '<span class="live-preview-status">正在启动生成通道</span>' +
+        '<span class="live-preview-status">' + escapeHtml(t('previewStarting')) + '</span>' +
         '</div>' +
         buildPreviewPlaceholder() +
-        '<iframe class="live-preview-frame" title="生成中页面预览" sandbox="" referrerpolicy="no-referrer" hidden></iframe>' +
-        '<div class="live-preview-note">预览每秒刷新一次，生成中可能残缺、错位或只有半个页面。</div>' +
+        '<iframe class="live-preview-frame" title="' + escapeAttr(t('previewFrameTitle')) + '" sandbox="" referrerpolicy="no-referrer" hidden></iframe>' +
+        '<div class="live-preview-note">' + escapeHtml(t('previewNote')) + '</div>' +
         '<div class="delivery-panel" hidden>' +
         '<div class="url-box"></div>' +
         '<div class="delivery-body">' +
         '<canvas class="qr-canvas" width="180" height="180"></canvas>' +
         '<div class="delivery-actions">' +
-        '<button type="button" data-copy-url="1">复制链接</button>' +
-        '<button type="button" data-download-qr="1">下载二维码</button>' +
-        '<a data-open-page="1" href="#" target="_blank" rel="noopener">打开页面</a>' +
+        '<button type="button" data-copy-url="1">' + escapeHtml(t('copyLink')) + '</button>' +
+        '<button type="button" data-download-qr="1">' + escapeHtml(t('downloadQr')) + '</button>' +
+        '<a data-open-page="1" href="#" target="_blank" rel="noopener">' + escapeHtml(t('openPage')) + '</a>' +
         '</div>' +
         '</div>' +
         '</div>');
     }
     scrollDown(false);
     return state.previewCard;
-  }
-
-  function showLivePreview(url, refreshMs) {
-    var card = ensureLivePreviewCard();
-    if (!url) return;
-    card.classList.add('is-previewing');
-    card.classList.remove('is-final');
-    var placeholder = card.querySelector('.preview-placeholder');
-    if (placeholder) placeholder.hidden = true;
-    var iframe = state.previewCard.querySelector('.live-preview-frame');
-    iframe.hidden = false;
-    iframe.setAttribute('sandbox', '');
-    iframe.dataset.previewUrl = url;
-    iframe.src = previewUrlWithTick(url);
-    if (state.previewTimer) clearInterval(state.previewTimer);
-    state.previewTimer = setInterval(function () {
-      if (!state.previewCard || !document.body.contains(state.previewCard)) {
-        stopLivePreview('');
-        return;
-      }
-      iframe.src = previewUrlWithTick(iframe.dataset.previewUrl || url);
-    }, refreshMs || 1000);
-    scrollDown(false);
   }
 
   function startGenerationPreview() {
@@ -227,7 +210,7 @@
     var card = ensureLivePreviewCard();
     card.classList.remove('is-final', 'delivery-card', 'is-previewing', 'is-stopped');
     delete card.dataset.pageUrl;
-    updateLivePreviewStatus('正在启动生成通道');
+    updateLivePreviewStatus(t('previewStarting'));
     var placeholder = card.querySelector('.preview-placeholder');
     if (placeholder) placeholder.hidden = false;
     var iframe = card.querySelector('.live-preview-frame');
@@ -238,7 +221,7 @@
       iframe.setAttribute('sandbox', '');
     }
     var note = card.querySelector('.live-preview-note');
-    if (note) note.textContent = '预览每秒刷新一次，生成中可能残缺、错位或只有半个页面。';
+    if (note) note.textContent = t('previewNote');
     var panel = card.querySelector('.delivery-panel');
     if (panel) panel.hidden = true;
     scrollDown(false);
@@ -247,7 +230,7 @@
   function finalizeLivePreview(url) {
     if (!url) return;
     var card = ensureLivePreviewCard();
-    stopLivePreview('页面已上线');
+    stopLivePreview(t('pageOnline'));
     state.lastUrl = url;
     card.classList.add('is-final', 'delivery-card');
     card.classList.remove('is-previewing', 'is-stopped');
@@ -260,7 +243,7 @@
     iframe.setAttribute('sandbox', 'allow-scripts allow-same-origin allow-popups');
     iframe.src = url;
     var note = card.querySelector('.live-preview-note');
-    if (note) note.textContent = '最终页面已嵌入到对话中。你也可以复制链接、下载二维码或新窗口打开。';
+    if (note) note.textContent = t('finalPreviewNote');
     var panel = card.querySelector('.delivery-panel');
     if (panel) panel.hidden = false;
     var urlBox = card.querySelector('.url-box');
@@ -288,26 +271,22 @@
     if (state.previewCard) state.previewCard.classList.add('is-stopped');
   }
 
-  function previewUrlWithTick(url) {
-    return url + (url.indexOf('?') === -1 ? '?' : '&') + 't=' + Date.now();
-  }
-
   function isPublishIntent(text) {
     text = text || '';
-    if (/(不要|别|不用|不必|暂不|先不|无需|取消)\s*(生成|发布|上线|创建页面|开始生成|开始做|重新生成|再做一个)/.test(text)) {
+    if (/(不要|別|别|不用|不必|暫不|暂不|先不|無需|无需|取消|do not|don't|dont|no need|not now)\s*(生成|發布|发布|上線|上线|建立頁面|创建页面|開始生成|开始生成|開始做|开始做|重新生成|再做一个|再做一個|generate|publish|go live|create page)/i.test(text)) {
       return false;
     }
-    return /(直接|立即|现在|确认|可以|重新|再次|再|开始)?\s*(生成|发布|上线|创建页面|开始生成|开始做|重新生成|再做一个)/.test(text);
+    return /(直接|立即|現在|现在|確認|确认|可以|重新|再次|再|開始|开始|please|now|confirm|ready to)?\s*(生成|發布|发布|上線|上线|建立頁面|创建页面|開始生成|开始生成|開始做|开始做|重新生成|再做一个|再做一個|generate|publish|go live|create page)/i.test(text);
   }
 
   function handleAction(action, userPublishIntent) {
     if (!action || !action.type) return;
     var params = action.params || {};
     if (action.type === 'upload') addUploadCard(params);
-    else if (action.type === 'ready') showGenerateCard(params.reason || '信息已经足够。');
+    else if (action.type === 'ready') showGenerateCard(params.reason || t('readyFallback'));
     else if (action.type === 'publish') {
       if (userPublishIntent) state.pendingAutoPublish = params;
-      else showGenerateCard(params.reason || 'AI 认为信息接近完整，请你确认后再生成。');
+      else showGenerateCard(params.reason || t('readyNeedsConfirm'));
     }
     else if (action.type === 'email') showEmailCard();
   }
@@ -315,12 +294,12 @@
   function runAutoPublish(params) {
     params = params || {};
     if (document.body.dataset.turnstileEnabled === '1') {
-      addMessage('system', '已确认生成。请先完成人机验证，验证通过后会开始生成。');
+      addMessage('system', t('turnstileFirst'));
       state.readyShown = false;
       showPublishConfirmCard();
       return;
     }
-    addMessage('system', params.reason ? '已确认生成：' + params.reason : '已确认生成，正在开始发布。');
+    addMessage('system', params.reason ? t('publishConfirmedReason', { reason: params.reason }) : t('publishConfirmed'));
     publish({ isAdult: state.currentPageIsAdult });
   }
 
@@ -332,12 +311,12 @@
     card.dataset.active = '1';
     card.dataset.slot = params.slot || '';
     card.innerHTML =
-      '<strong>上传资料图</strong>' +
-      '<p>选择图片并写一句用途说明，例如“活动主视觉”“产品细节”“头像”。图片会自动转成适合网页分发的 WebP。</p>' +
-      '<input class="upload-caption" type="text" placeholder="图片说明" value="' + escapeAttr(params.hint || '') + '">' +
+      '<strong>' + escapeHtml(t('uploadTitle')) + '</strong>' +
+      '<p>' + escapeHtml(t('uploadBody')) + '</p>' +
+      '<input class="upload-caption" type="text" placeholder="' + escapeAttr(t('uploadCaption')) + '" value="' + escapeAttr(params.hint || '') + '">' +
       '<div class="upload-card-actions">' +
-      '<label>选择图片<input class="upload-file" type="file" accept="image/*"></label>' +
-      '<button type="button" class="skip-upload">没有图片，跳过</button>' +
+      '<label>' + escapeHtml(t('chooseImage')) + '<input class="upload-file" type="file" accept="image/*"></label>' +
+      '<button type="button" class="skip-upload">' + escapeHtml(t('skipUpload')) + '</button>' +
       '</div>';
     messages.appendChild(card);
     scrollDown(false);
@@ -347,13 +326,13 @@
     card.querySelector('.skip-upload').addEventListener('click', function () {
       card.dataset.active = '0';
       card.remove();
-      sendMessage('没有图片，跳过图片上传，可以继续生成。');
+      sendMessage(t('skipUploadMessage'));
     });
   }
 
   function setQuota(q) {
     if (!q) return;
-    var text = q.credits !== undefined ? '积分 ' + q.credits : '剩余 ' + q.remaining + '/' + q.limit;
+    var text = q.credits !== undefined ? t('quotaCredits', { credits: q.credits }) : t('quotaRemaining', { remaining: q.remaining, limit: q.limit });
     $('#quotaText').textContent = text;
   }
 
@@ -379,11 +358,11 @@
     var login = $('#loginToggle');
     if (myPages) {
       myPages.hidden = !state.user;
-      if (window.matchMedia('(max-width: 760px)').matches) myPages.textContent = '页面';
-      else myPages.textContent = '我的页面';
+      if (window.matchMedia('(max-width: 760px)').matches) myPages.textContent = t('myPagesShort');
+      else myPages.textContent = t('myPages');
     }
     if (login) {
-      login.textContent = state.user ? (state.user.email || '账号').split('@')[0] : '登录';
+      login.textContent = state.user ? (state.user.email || t('accountFallback')).split('@')[0] : t('login');
     }
     $('#loginStepEmail').hidden = !!state.user;
     $('#loginStepCode').hidden = true;
@@ -392,6 +371,8 @@
   }
 
   function api(path, body) {
+    body = body || {};
+    body.locale = locale;
     return fetch(path, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -422,6 +403,8 @@
     var content = message.content || '';
     if (role === 'system' && content.indexOf('[系统事件]') === 0) return;
     if (role === 'user' && content.indexOf('[当前页面信息]') === 0) return;
+    if (role === 'user' && content.indexOf('[目前頁面資訊]') === 0) return;
+    if (role === 'user' && content.indexOf('[Current page info]') === 0) return;
     if (role === 'user' && content.indexOf('[图片已上传:') === 0) return;
     addMessage(role === 'user' ? 'user' : (role === 'system' ? 'system' : 'assistant'), content);
   }
@@ -448,23 +431,23 @@
 
     if (data.messages && data.messages.length) {
       messages.classList.remove('is-hero');
-      input.placeholder = '继续描述你的页面...';
+      input.placeholder = t('composerPlaceholder');
       data.messages.forEach(renderStoredMessage);
     } else {
       messages.classList.add('is-hero');
-      input.placeholder = '一句话描述你想要的页面…';
+      input.placeholder = t('heroComposerPlaceholder');
       renderHeroLogo();
-      addMessage('assistant', data.greeting || '你想创建什么类型的页面？可以选择名片、宣传海报、文章页面、活动页面，或者直接自由描述。');
+      addMessage('assistant', data.greeting || t('greeting'));
       renderPresetCard();
     }
 
     if (data.page && data.page.url) {
       finalizeLivePreview(data.page.url);
       if (data.edit_mode) {
-        addMessage('system', '当前正在修改已有页面，下一次生成会覆盖原地址。');
+        addMessage('system', t('editModeCurrent'));
       }
     } else if (data.edit_mode && fresh) {
-      addMessage('assistant', '已进入修改模式。告诉我你想调整哪里，完成后点击生成会覆盖原页面。');
+      addMessage('assistant', t('editModeEntered'));
     }
   }
 
@@ -487,12 +470,12 @@
         forgetSession();
         return createFreshSession();
       }).catch(function () {
-        addMessage('system', '会话创建失败，请稍后刷新重试。');
+        addMessage('system', t('sessionFailed'));
       });
       return;
     }
     createFreshSession().catch(function () {
-      addMessage('system', '会话创建失败，请稍后刷新重试。');
+      addMessage('system', t('sessionFailed'));
     });
   }
 
@@ -527,12 +510,12 @@
     if (!text || state.busy) return;
     if (messages.classList.contains('is-hero')) {
       messages.classList.remove('is-hero');
-      input.placeholder = '继续描述你的页面...';
+      input.placeholder = t('composerPlaceholder');
     }
     var publishIntent = isPublishIntent(text);
     if (state.awaitingEmail) {
       var contextualEmail = extractEmail(text);
-      var skipEmailIntent = /(不(用|要|留|绑定)|暂不|跳过|算了|不用了|不要了)/.test(text);
+      var skipEmailIntent = /(不(用|要|留|绑定|綁定)|暫不|暂不|跳過|跳过|算了|不用了|不要了|skip|no need|not now|no thanks)/i.test(text);
       if (contextualEmail || skipEmailIntent) {
         setBusy(true);
         addMessage('user', text);
@@ -550,7 +533,7 @@
       }
       if (publishIntent) {
         completeEmailCard(document.querySelector('.email-card[data-active="1"]'));
-        addMessage('system', '已关闭上一页的邮箱绑定入口，继续准备新的生成。');
+        addMessage('system', t('emailClosedForNewPublish'));
       }
     }
     setBusy(true);
@@ -562,7 +545,7 @@
     fetch('/api/chat.php', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ session_id: state.sessionId, message: text })
+      body: JSON.stringify({ session_id: state.sessionId, message: text, locale: locale })
     }).then(function (r) {
       return readSse(r, {
         delta: function (d) {
@@ -571,11 +554,11 @@
           scrollDown(false);
         },
         action: function (d) { handleAction(d, publishIntent); },
-        notice: function (d) { addMessage('system', d.message || '系统提醒'); },
-        error: function (d) { addMessage('system', d.message || 'AI 对话失败'); }
+        notice: function (d) { addMessage('system', d.message || t('systemNotice')); },
+        error: function (d) { addMessage('system', '[err] ' + (d.message || t('aiChatFailed'))); }
       });
     }).then(function () {
-      if (!state.pendingAutoPublish && publishIntent) showGenerateCard('你刚才提到了生成或发布，可以从这里确认生成。');
+      if (!state.pendingAutoPublish && publishIntent) showGenerateCard(t('mentionedGenerate'));
     }).finally(function () {
       ai.classList.remove('is-typing');
       setBusy(false);
@@ -587,12 +570,20 @@
     });
   }
 
+  function buildBar(chars) {
+    var pct = Math.min(99, Math.round(chars / 35000 * 100));
+    var filled = Math.round(pct * 16 / 100);
+    var bar = '';
+    for (var i = 0; i < 16; i++) bar += i < filled ? '#' : '.';
+    return 'BUILD [' + bar + '] ' + pct + '%';
+  }
+
   function publish(options) {
     if (!state.sessionId || state.busy) return;
     setBusy(true);
     state.lastUrl = '';
     var publishTerminal = false;
-    var progress = addMessage('system', '开始生成页面，请保持当前窗口打开。');
+    var progress = addMessage('system', t('startGenerating'));
     startGenerationPreview();
     var turnstileToken = '';
     if (document.body.dataset.turnstileEnabled === '1') {
@@ -605,7 +596,7 @@
         turnstileToken = responseEl ? responseEl.value : '';
       }
       if (!turnstileToken) {
-        addMessage('system', '请先完成人机验证，再生成页面。');
+        addMessage('system', t('turnstileRequired'));
         setBusy(false);
         return;
       }
@@ -617,6 +608,7 @@
       body: JSON.stringify({
         session_id: state.sessionId,
         turnstile_token: turnstileToken,
+        locale: locale,
         is_adult: !!(options && options.isAdult)
       })
     }).then(function (r) {
@@ -624,27 +616,30 @@
       var lastProgressAt = 0;
       return readSse(r, {
         stage: function (d) {
-          progress.textContent = d.stage === 'writing' ? '正在写入页面文件...' : (d.stage === 'done' ? '页面写入完成。' : '阶段：' + d.stage);
-          if (d.stage === 'writing') updateLivePreviewStatus('正在写入最终页面');
-          else if (d.stage === 'done') stopLivePreview('最终页面已写入');
-        },
-        preview: function (d) {
-          showLivePreview(d.url, d.refresh_ms || 1000);
+          if (d.stage === 'writing') {
+            progress.textContent = 'BUILD [################] 100% · ' + t('stageWriting');
+            updateLivePreviewStatus(t('writingFinal'));
+          } else if (d.stage === 'done') {
+            progress.textContent = '[ok] ' + t('stageDone');
+            stopLivePreview(t('finalWritten'));
+          } else {
+            progress.textContent = '[..] ' + t('stage', { stage: d.stage });
+          }
         },
         delta: function (d) {
           generatedChars += (d.text || '').length;
           var now = Date.now();
           if (now - lastProgressAt > 800) {
-            progress.textContent = 'AI 正在生成页面，已接收约 ' + generatedChars + ' 字符...';
-            updateLivePreviewStatus('已接收约 ' + generatedChars + ' 字符');
+            progress.textContent = buildBar(generatedChars) + ' · ' + t('receivedCharsShort', { count: generatedChars });
+            updateLivePreviewStatus(buildBar(generatedChars));
             lastProgressAt = now;
           }
         },
         error: function (d) {
           publishTerminal = true;
           state.readyShown = false;
-          stopLivePreview('生成失败，预览已停止');
-          addMessage('system', d.message || '生成失败');
+          stopLivePreview(t('previewFailed'));
+          addMessage('system', '[err] ' + (d.message || t('generationFailed')));
           if (window.turnstile) window.turnstile.reset();
         },
         result: function (d) {
@@ -655,7 +650,7 @@
           state.readyShown = false;
           state.publishCard = null;
           finalizeLivePreview(d.url);
-          addMessage('assistant', '你的页面已上线。要不要留个邮箱？以后可以用邮件里的链接修改这个页面。');
+          addMessage('assistant', t('publishedAskEmail'));
           showEmailCard();
           api('/api/auth/me.php', {}).then(function (me) { setUser(me.user); setQuota(me.quota); }).catch(function () {});
           if (window.turnstile) window.turnstile.reset();
@@ -663,13 +658,13 @@
       });
     }).then(function () {
       if (!publishTerminal) {
-        stopLivePreview('连接结束，未收到最终页面');
-        addMessage('system', '生成连接已结束但没有收到页面地址。请再点一次生成；如果重复出现，说明模型输出超时。');
+        stopLivePreview(t('connectionEnded'));
+        addMessage('system', '[err] ' + t('connectionEndedBody'));
       }
     }).catch(function () {
       state.readyShown = false;
-      stopLivePreview('生成连接中断');
-      addMessage('system', '生成连接中断。请稍后重试，或减少页面内容后再生成。');
+      stopLivePreview(t('connectionInterrupted'));
+      addMessage('system', '[err] ' + t('connectionInterruptedBody'));
       if (window.turnstile) window.turnstile.reset();
     }).finally(function () {
       setBusy(false);
@@ -685,10 +680,10 @@
       return;
     }
     var card = addActionCard('email-card',
-      '<div class="action-title">留下邮箱，获得后续修改链接</div>' +
-      '<p>如果你希望以后能修改这个页面，在这里填写邮箱。我们会发送一个带鉴权 token 的修改链接；不填写则页面不可修改。</p>' +
-      '<div class="email-row"><input class="owner-email" type="email" placeholder="your@email.com"><button type="button" data-bind-email="1">发送修改链接</button></div>' +
-      '<div class="inline-actions"><button type="button" class="ghost-btn" data-skip-email="1">暂不绑定</button></div>');
+      '<div class="action-title">' + escapeHtml(t('emailTitle')) + '</div>' +
+      '<p>' + escapeHtml(t('emailBody')) + '</p>' +
+      '<div class="email-row"><input class="owner-email" type="email" placeholder="' + escapeAttr(t('emailPlaceholder')) + '"><button type="button" data-bind-email="1">' + escapeHtml(t('sendEditLink')) + '</button></div>' +
+      '<div class="inline-actions"><button type="button" class="ghost-btn" data-skip-email="1">' + escapeHtml(t('skipEmail')) + '</button></div>');
     card.dataset.active = '1';
     state.awaitingEmail = true;
   }
@@ -698,7 +693,7 @@
     var email = explicitEmail || (emailInput ? emailInput.value.trim() : '');
     if (!email) return Promise.resolve(false);
     if (!extractEmail(email) || extractEmail(email) !== email) {
-      addMessage('system', '请在邮箱卡片里填写有效邮箱。');
+      addMessage('system', t('invalidEmail'));
       return Promise.resolve(false);
     }
     if (emailInput) emailInput.value = email;
@@ -708,10 +703,10 @@
         return false;
       }
       completeEmailCard(card);
-      addMessage('assistant', '修改链接已经发送到 ' + email + '，以后可以用邮件里的链接回来修改这个页面。');
+      addMessage('assistant', t('editLinkSent', { email: email }));
       return true;
     }).catch(function () {
-      addMessage('system', '修改链接发送失败，请稍后再试。');
+      addMessage('system', t('editLinkFailed'));
       return false;
     });
   }
@@ -724,7 +719,7 @@
 
   function skipEmailBinding(card) {
     completeEmailCard(card);
-    addMessage('system', '已跳过邮箱绑定。这个页面将无法通过邮件链接修改。');
+    addMessage('system', t('emailSkipped'));
   }
 
   function toggleMyPages(open) {
@@ -736,17 +731,17 @@
   function loadMyPages() {
     var list = $('#myPagesList');
     if (!state.user) {
-      list.innerHTML = '<span>登录后可以查看并修改你名下的页面。</span>';
+      list.innerHTML = '<span>' + escapeHtml(t('myPagesHint')) + '</span>';
       return;
     }
-    list.innerHTML = '<span>读取中...</span>';
+    list.innerHTML = '<span>' + escapeHtml(t('myPagesLoading')) + '</span>';
     api('/api/my-pages.php', {}).then(function (r) {
       if (r.error) {
         list.innerHTML = '<span>' + escapeHtml(r.error.message) + '</span>';
         return;
       }
       if (!r.pages || !r.pages.length) {
-        list.innerHTML = '<span>你还没有登录后创建的页面。当前会话生成的新页面会自动归到这里。</span>';
+        list.innerHTML = '<span>' + escapeHtml(t('myPagesEmpty')) + '</span>';
         return;
       }
       list.innerHTML = r.pages.map(function (p) {
@@ -754,11 +749,11 @@
         return '<div class="my-page-item" data-slug="' + escapeAttr(p.slug) + '">' +
           '<div class="my-page-main">' +
           '<div class="my-page-title">' + escapeHtml(p.title || p.slug) + '</div>' +
-          '<div class="my-page-meta">' + escapeHtml((p.type || 'page') + ' · ' + date) + '</div>' +
+          '<div class="my-page-meta">' + escapeHtml((p.type || t('pageTypeFallback')) + ' · ' + date) + '</div>' +
           '</div>' +
           (p.is_adult ? '<span class="my-page-badge">18+</span>' : '<span></span>') +
-          '<a href="' + escapeAttr(p.url) + '" target="_blank" rel="noopener">打开</a>' +
-          '<button type="button" data-edit-slug="' + escapeAttr(p.slug) + '">修改</button>' +
+          '<a href="' + escapeAttr(p.url) + '" target="_blank" rel="noopener">' + escapeHtml(t('openPage')) + '</a>' +
+          '<button type="button" data-edit-slug="' + escapeAttr(p.slug) + '">' + escapeHtml(t('edit')) + '</button>' +
           '</div>';
       }).join('');
     });
@@ -778,7 +773,7 @@
         $('#messages').innerHTML = '';
         state.readyShown = false;
         state.publishCard = null;
-        addMessage('assistant', '已进入修改模式。告诉我你想调整哪里，完成后点击生成会覆盖原页面。');
+        addMessage('assistant', t('editModeEntered'));
       });
     });
   }
@@ -789,14 +784,15 @@
     fd.append('session_id', state.sessionId);
     fd.append('caption', caption || '');
     fd.append('slot', slot || '');
+    fd.append('locale', locale);
     fd.append('file', file);
     fetch('/api/upload.php', { method: 'POST', body: fd }).then(function (r) { return r.json(); }).then(function (d) {
       if (d.error) { addMessage('system', d.error.message); return; }
       if (card) {
         card.dataset.active = '0';
-        card.innerHTML = '<strong>图片已上传</strong><p>' + escapeHtml(caption || '无说明') + '</p><img src="' + escapeAttr(d.url) + '" alt="" style="width:96px;height:96px;object-fit:cover;border-radius:12px">';
+        card.innerHTML = '<strong>' + escapeHtml(t('imageUploaded')) + '</strong><p>' + escapeHtml(caption || t('noCaption')) + '</p><img src="' + escapeAttr(d.url) + '" alt="" style="width:96px;height:96px;object-fit:cover;border-radius:12px">';
       }
-      toast('图片已上传并转换为 WebP');
+      toast(t('imageUploadedToast'));
     });
   }
 
@@ -823,7 +819,7 @@
     if (!canvas) return false;
     var fallback = document.createElement('div');
     fallback.className = 'qr-fallback';
-    fallback.textContent = '二维码生成失败，请复制链接。';
+    fallback.textContent = t('qrFailed');
     canvas.replaceWith(fallback);
     return false;
   }
@@ -884,7 +880,7 @@
       disableCard(continueChat.closest('.action-card'));
       state.readyShown = false;
       state.publishCard = null;
-      addMessage('system', '可以继续补充需求，准备好后再说“生成页面”。');
+      addMessage('system', t('continuePrompt'));
       return;
     }
     var bindEmailBtn = e.target.closest('button[data-bind-email]');
@@ -903,11 +899,11 @@
     if (e.target.closest('button[data-copy-url]')) {
       var copyBtn = e.target.closest('button[data-copy-url]');
       navigator.clipboard.writeText(url).then(function () {
-        toast('链接已复制');
-        copyBtn.textContent = '已复制 ✓';
-        setTimeout(function () { copyBtn.textContent = '复制链接'; }, 1500);
+        toast(t('copied'));
+        copyBtn.textContent = t('copiedButton');
+        setTimeout(function () { copyBtn.textContent = t('copyLink'); }, 1500);
       }).catch(function () {
-        toast('复制失败，请手动复制');
+        toast(t('copyFailed'));
       });
       return;
     }
@@ -943,23 +939,23 @@
     var btn = $('#sendCodeBtn');
     var left = seconds;
     btn.disabled = true;
-    btn.textContent = '重发 ' + left + 's';
+    btn.textContent = t('resendSeconds', { seconds: left });
     clearInterval(codeTimer);
     codeTimer = setInterval(function () {
       left -= 1;
       if (left <= 0) {
         clearInterval(codeTimer);
         btn.disabled = false;
-        btn.textContent = '重新发送';
+        btn.textContent = t('resend');
         return;
       }
-      btn.textContent = '重发 ' + left + 's';
+      btn.textContent = t('resendSeconds', { seconds: left });
     }, 1000);
   }
 
   $('#sendCodeBtn').addEventListener('click', function () {
     var email = $('#loginEmail').value.trim();
-    if (!email) { loginHint('请先输入邮箱。'); return; }
+    if (!email) { loginHint(t('enterEmailFirst')); return; }
     var btn = this;
     btn.disabled = true;
     api('/api/auth/send-code.php', { email: email }).then(function (r) {
@@ -970,11 +966,11 @@
       }
       $('#loginStepCode').hidden = false;
       $('#loginCode').focus();
-      loginHint('验证码已发送到 ' + email + '，5 分钟内有效。');
+      loginHint(t('codeSent', { email: email }));
       startCodeCountdown(60);
     }).catch(function () {
       btn.disabled = false;
-      loginHint('发送失败，请稍后重试。');
+      loginHint(t('sendFailed'));
     });
   });
   $('#verifyCodeBtn').addEventListener('click', function () {
@@ -982,6 +978,7 @@
       if (r.error) { loginHint(r.error.message); return; }
       loginHint('');
       $('#loginCode').value = '';
+      toast(t('loginSuccess'));
       api('/api/auth/me.php', {}).then(function (me) { setUser(me.user); setQuota(me.quota); });
     });
   });
@@ -989,6 +986,7 @@
     api('/api/auth/logout.php', {}).then(function () {
       loginHint('');
       $('#accountBox').hidden = true;
+      toast(t('logoutSuccess'));
       api('/api/auth/me.php', {}).then(function (me) { setUser(me.user); setQuota(me.quota); }).catch(function () { setUser(null); });
     });
   });
@@ -998,6 +996,19 @@
   $('#loginCode').addEventListener('keydown', function (e) {
     if (e.key === 'Enter') { e.preventDefault(); $('#verifyCodeBtn').click(); }
   });
+  var localeSwitch = $('#localeSwitch');
+  if (localeSwitch) {
+    localeSwitch.addEventListener('click', function (e) {
+      var btn = e.target.closest('button[data-locale-choice]');
+      if (!btn) return;
+      var nextLocale = normalizeLocale(btn.dataset.localeChoice);
+      if (nextLocale === locale) return;
+      setLocaleCookie(nextLocale);
+      var url = new URL(window.location.href);
+      url.searchParams.set('locale', nextLocale);
+      window.location.href = url.toString();
+    });
+  }
 
   start();
 })();

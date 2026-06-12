@@ -57,6 +57,56 @@ function validate_lang($lang) {
     return in_array($lang, $allowed, true) ? $lang : 'zh-CN';
 }
 
+function normalize_locale($locale) {
+    $raw = trim((string)$locale);
+    if ($raw === '') return '';
+    $lower = strtolower(str_replace('_', '-', $raw));
+    if (in_array($lower, ['zh-cn', 'zh-hans', 'zh-sg', 'zh'], true)) return 'zh-CN';
+    if (in_array($lower, ['zh-tw', 'zh-hant', 'zh-hk', 'zh-mo'], true)) return 'zh-TW';
+    if (strpos($lower, 'en') === 0) return 'en';
+    return validate_lang($raw) === $raw ? $raw : '';
+}
+
+function locale_from_accept_language($header = null) {
+    $header = $header ?? ($_SERVER['HTTP_ACCEPT_LANGUAGE'] ?? '');
+    foreach (explode(',', (string)$header) as $part) {
+        $candidate = normalize_locale(trim(explode(';', $part)[0] ?? ''));
+        if ($candidate !== '') return $candidate;
+    }
+    return 'zh-CN';
+}
+
+function resolve_locale($explicit = null) {
+    $candidate = normalize_locale($explicit);
+    if ($candidate !== '') return $candidate;
+    $candidate = normalize_locale($_COOKIE['xlog_locale'] ?? '');
+    if ($candidate !== '') return $candidate;
+    return locale_from_accept_language();
+}
+
+function set_locale_cookie($locale) {
+    $locale = validate_lang($locale);
+    $secure = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on');
+    setcookie('xlog_locale', $locale, [
+        'expires' => time() + 86400 * 365,
+        'path' => '/',
+        'secure' => $secure,
+        'httponly' => false,
+        'samesite' => 'Lax',
+    ]);
+    $_COOKIE['xlog_locale'] = $locale;
+}
+
+function t($group, $key, $uiLang = null, array $vars = []) {
+    $uiLang = validate_lang($uiLang ?: resolve_locale());
+    $set = localized_copy($group, $uiLang);
+    $value = $set[$key] ?? '';
+    foreach ($vars as $name => $replacement) {
+        $value = str_replace('{' . $name . '}', (string)$replacement, $value);
+    }
+    return $value;
+}
+
 function validate_theme($theme) {
     return ($theme === 'dark') ? 'dark' : 'light';
 }

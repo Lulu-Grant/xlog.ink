@@ -3,34 +3,36 @@ require_once __DIR__ . '/../../includes/mailer.php';
 
 require_method('POST');
 $data = json_input();
+$locale = resolve_locale($data['locale'] ?? null);
+set_locale_cookie($locale);
 $email = normalize_email($data['email'] ?? '');
 if ($email === '') api_error('bad_email', 'Invalid email');
 
 db_exec('DELETE FROM login_codes WHERE expires_at < ?', [now_iso()]);
 $recent = db_one('SELECT created_at FROM login_codes WHERE email = ? ORDER BY created_at DESC LIMIT 1', [$email]);
 if ($recent && strtotime($recent['created_at']) > time() - 60) {
-    api_error('too_frequent', 'Please wait before requesting another code', 429);
+    api_error('too_frequent', t('api', 'waitBeforeCode', $locale), 429);
 }
 $todayCount = db_one('SELECT COUNT(*) AS c FROM login_codes WHERE email = ? AND substr(created_at, 1, 10) = ?', [$email, utc_date()]);
 if ($todayCount && (int)$todayCount['c'] >= 10) {
-    api_error('daily_limit', '今日验证码发送次数已达上限', 429);
+    api_error('daily_limit', t('api', 'dailyCodeLimit', $locale), 429);
 }
 $ipKey = 'ip:' . client_ip();
 $ipEventKey = mail_event_key($ipKey);
 $ipCount = db_one('SELECT COUNT(*) AS c FROM mail_events WHERE kind = ? AND event_key = ? AND substr(created_at, 1, 10) = ?', ['login-code-ip', $ipEventKey, utc_date()]);
 if ($ipCount && (int)$ipCount['c'] >= 30) {
-    api_error('ip_daily_limit', '当前网络今日验证码发送次数已达上限', 429);
+    api_error('ip_daily_limit', t('api', 'ipDailyCodeLimit', $locale), 429);
 }
 
 $code = (string)random_int(100000, 999999);
 $hash = password_hash($code, PASSWORD_DEFAULT);
 db_exec('INSERT INTO login_codes (email, code_hash, expires_at, attempts, created_at) VALUES (?, ?, ?, 0, ?)', [$email, $hash, gmdate('c', time() + 300), now_iso()]);
 try {
-    send_mail_template($email, 'login-code', ['code' => $code]);
+    send_mail_template($email, 'login-code', ['code' => $code], $locale);
     record_mail_event('login-code', $email);
     record_mail_event('login-code-ip', $ipKey);
 } catch (Throwable $e) {
     db_exec('DELETE FROM login_codes WHERE email = ? AND code_hash = ?', [$email, $hash]);
-    api_error('mail_failed', '验证码邮件发送失败，请稍后重试。', 502);
+    api_error('mail_failed', t('api', 'mailFailed', $locale), 502);
 }
 api_json(['ok' => true]);

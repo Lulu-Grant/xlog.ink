@@ -4,17 +4,18 @@ require_once __DIR__ . '/../../includes/mailer.php';
 require_method('POST');
 xlog_start_session();
 $data = json_input();
+$locale = resolve_locale($data['locale'] ?? null);
 $email = normalize_email($data['email'] ?? '');
 $code = trim($data['code'] ?? '');
-if ($email === '' || !preg_match('/^\d{6}$/', $code)) api_error('bad_request', 'Email and 6-digit code required');
+if ($email === '' || !preg_match('/^\d{6}$/', $code)) api_error('bad_request', t('api', 'badLoginRequest', $locale));
 
 $row = db_one('SELECT rowid, * FROM login_codes WHERE email = ? ORDER BY created_at DESC LIMIT 1', [$email]);
 if (!$row || strtotime($row['expires_at']) < time() || (int)$row['attempts'] >= 5) {
-    api_error('invalid_code', 'Code expired or invalid', 400);
+    api_error('invalid_code', t('api', 'invalidCode', $locale), 400);
 }
 if (!password_verify($code, $row['code_hash'])) {
     db_exec('UPDATE login_codes SET attempts = attempts + 1 WHERE rowid = ?', [$row['rowid']]);
-    api_error('invalid_code', 'Invalid code', 400);
+    api_error('invalid_code', t('api', 'wrongCode', $locale), 400);
 }
 db_exec('DELETE FROM login_codes WHERE email = ?', [$email]);
 

@@ -17,9 +17,13 @@ header("Content-Security-Policy: default-src 'none'; img-src data: https://xlog.
 echo $html;
 
 function preview_waiting_html() {
+    $locale = resolve_locale();
+    $title = h(t('app', 'previewWaitingTitle', $locale));
+    $body = h(t('app', 'previewWaitingBody', $locale));
+    $aria = h(t('app', 'previewAria', $locale));
     return <<<HTML
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="{$locale}">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
@@ -29,7 +33,7 @@ function preview_waiting_html() {
 </head>
 <body>
   <div class="wrap">
-    <svg class="orbit" viewBox="0 0 520 260" role="img" aria-label="页面生成中">
+    <svg class="orbit" viewBox="0 0 520 260" role="img" aria-label="{$aria}">
       <defs>
         <linearGradient id="g" x1="0%" x2="100%" y1="0%" y2="100%">
           <stop offset="0%" stop-color="#39ffb6"/>
@@ -47,8 +51,8 @@ function preview_waiting_html() {
       <rect class="scan" x="42" y="34" width="436" height="36" rx="18"/>
     </svg>
     <div class="copy">
-      <strong>等待 HTML 流进入预览通道</strong>
-      <span>模型开始吐出页面后，这里会每秒刷新一次。</span>
+      <strong>{$title}</strong>
+      <span>{$body}</span>
     </div>
   </div>
 </body>

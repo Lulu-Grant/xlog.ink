@@ -62,6 +62,7 @@ CREATE TABLE IF NOT EXISTS sessions (
     edit_mode TEXT NOT NULL DEFAULT '',
     messages TEXT NOT NULL DEFAULT '[]',
     state TEXT NOT NULL DEFAULT 'chatting',
+    locale TEXT NOT NULL DEFAULT 'zh-CN',
     ip TEXT NOT NULL,
     client_id TEXT DEFAULT '',
     created_at TEXT NOT NULL,
@@ -129,6 +130,7 @@ CREATE INDEX IF NOT EXISTS idx_mail_events_lookup ON mail_events(kind, event_key
 ");
     db_ensure_column($pdo, 'sessions', 'edit_mode', "TEXT NOT NULL DEFAULT ''");
     db_ensure_column($pdo, 'sessions', 'client_id', "TEXT DEFAULT ''");
+    db_ensure_column($pdo, 'sessions', 'locale', "TEXT NOT NULL DEFAULT 'zh-CN'");
     db_ensure_column($pdo, 'images', 'slot', "TEXT DEFAULT ''");
 }
 
@@ -201,9 +203,10 @@ function create_session($pageSlug = null, array $seedMessages = [], $editMode = 
     $id = bin2hex(random_bytes(16));
     $now = now_iso();
     $clientId = xlog_cookie_id();
+    $locale = resolve_locale();
     db_exec(
-        'INSERT INTO sessions (id, user_id, page_slug, edit_mode, messages, state, ip, client_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-        [$id, current_user_id(), $pageSlug, $editMode, json_encode($seedMessages, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES), 'chatting', client_ip(), $clientId, $now, $now]
+        'INSERT INTO sessions (id, user_id, page_slug, edit_mode, messages, state, locale, ip, client_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        [$id, current_user_id(), $pageSlug, $editMode, json_encode($seedMessages, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES), 'chatting', $locale, client_ip(), $clientId, $now, $now]
     );
     return $id;
 }

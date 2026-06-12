@@ -2,6 +2,7 @@
 // V2 bootstrap: config, sessions, API helpers.
 
 require_once __DIR__ . '/helpers.php';
+require_once __DIR__ . '/i18n.php';
 
 if (!defined('XLOG_ROOT')) {
     define('XLOG_ROOT', dirname(__DIR__));

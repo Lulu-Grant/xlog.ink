@@ -11,11 +11,16 @@ require_once __DIR__ . '/../includes/turnstile.php';
 
 require_method('POST');
 $data = json_input();
+$locale = resolve_locale($data['locale'] ?? null);
+set_locale_cookie($locale);
+$GLOBALS['xlog_publish_locale'] = $locale;
 $sessionId = trim($data['session_id'] ?? '');
 if (!preg_match('/^[a-f0-9]{32}$/', $sessionId)) api_error('bad_session', 'Invalid session');
 $session = db_one('SELECT * FROM sessions WHERE id = ?', [$sessionId]);
 if (!$session) api_error('session_not_found', 'Session not found', 404);
-if (!session_access_allowed($session)) api_error('forbidden_session', '你不能发布这个会话。', 403);
+if (!session_access_allowed($session)) api_error('forbidden_session', t('api', 'forbiddenSessionPublish', $locale), 403);
+db_exec('UPDATE sessions SET locale = ?, updated_at = ? WHERE id = ?', [$locale, now_iso(), $sessionId]);
+$session['locale'] = $locale;
 if (!current_user_id()) xlog_cookie_id();
 
 sse_start();
@@ -26,7 +31,7 @@ $usage = [];
 try {
     if (!api_turnstile_ok($data['turnstile_token'] ?? '')) {
         record_publish_event($sessionId, null, 'generate', 'failed', 'turnstile_failed');
-        sse_event('error', ['code' => 'turnstile_failed', 'message' => '请完成人机验证后再生成。']);
+        sse_event('error', ['code' => 'turnstile_failed', 'message' => t('api', 'turnstileFailed', $locale)]);
         exit;
     }
 
@@ -34,66 +39,54 @@ try {
         $editPage = db_one('SELECT * FROM pages WHERE slug = ? AND status = ?', [$session['page_slug'], 'live']);
         if (!$editPage) {
             record_publish_event($sessionId, $session['page_slug'], 'generate', 'failed', 'edit_page_not_found');
-            sse_event('error', ['code' => 'edit_page_not_found', 'message' => '要修改的页面不存在或已下线。']);
+            sse_event('error', ['code' => 'edit_page_not_found', 'message' => t('api', 'editPageNotFound', $locale)]);
             exit;
         }
         if ($editMode === 'edit_owner') {
             if (!current_user_can_edit_page($editPage)) {
                 record_publish_event($sessionId, $session['page_slug'], 'generate', 'failed', 'forbidden_edit_session');
-                sse_event('error', ['code' => 'forbidden_edit_session', 'message' => '你没有权限覆盖这个页面。']);
+                sse_event('error', ['code' => 'forbidden_edit_session', 'message' => t('api', 'forbiddenEditOwner', $locale)]);
                 exit;
             }
         } elseif ($editMode === 'edit_token') {
             if (empty($editPage['editable'])) {
                 record_publish_event($sessionId, $session['page_slug'], 'generate', 'failed', 'forbidden_edit_session');
-                sse_event('error', ['code' => 'forbidden_edit_session', 'message' => '这个页面当前不可通过邮件链接修改。']);
+                sse_event('error', ['code' => 'forbidden_edit_session', 'message' => t('api', 'forbiddenEditToken', $locale)]);
                 exit;
             }
         }
     } elseif (!empty($editMode)) {
         record_publish_event($sessionId, $session['page_slug'] ?: null, 'generate', 'failed', 'invalid_edit_session');
-        sse_event('error', ['code' => 'invalid_edit_session', 'message' => '编辑会话无效，请重新进入修改链接。']);
+        sse_event('error', ['code' => 'invalid_edit_session', 'message' => t('api', 'invalidEditSession', $locale)]);
         exit;
     }
 
     $quotaCharge = consume_quota('generate');
     if (!$quotaCharge['ok']) {
         record_publish_event($sessionId, $session['page_slug'] ?: null, 'generate', 'failed', 'quota_exceeded');
-        sse_event('error', ['code' => 'quota_exceeded', 'message' => '今日生成额度已用完。登录后每天可生成 50 个页面。']);
+        sse_event('error', ['code' => 'quota_exceeded', 'message' => t('api', 'quotaExceeded', $locale)]);
         exit;
     }
 
     sse_event('stage', ['stage' => 'generating']);
-    write_live_preview($sessionId, '');
-    sse_event('preview', [
-        'url' => '/api/preview.php?session_id=' . rawurlencode($sessionId),
-        'refresh_ms' => 1000,
-    ]);
     $messages = session_messages($sessionId) ?: [];
     $images = session_images_context($sessionId);
-    $system = prompt_text('gen-system.txt');
+    $system = prompt_text('gen-system.txt') . "\n\n" . t('prompt', 'genLanguage', $locale);
     $context = "【图片清单 JSON】\n" . json_encode($images, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
     $modelMessages = [
         ['role' => 'system', 'content' => $system],
         ['role' => 'user', 'content' => "下面是完整对话历史 JSON，请生成最终页面。\n" . json_encode($messages, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) . "\n\n" . $context],
     ];
     $raw = '';
-    $lastPreviewWrite = 0.0;
-    $usage = ai_stream_generate($modelMessages, function ($delta) use (&$raw, &$lastPreviewWrite, $sessionId) {
+    $usage = ai_stream_generate($modelMessages, function ($delta) use (&$raw) {
         $raw .= $delta;
         sse_event('delta', ['text' => mb_substr($delta, 0, 160, 'UTF-8')]);
-        $now = microtime(true);
-        if ($now - $lastPreviewWrite >= 0.8) {
-            write_live_preview($sessionId, $raw);
-            $lastPreviewWrite = $now;
-        }
     });
-    write_live_preview($sessionId, $raw);
 
     if (strpos($raw, '<!-- REFUSED:') !== false) {
         refund_generate_charge($quotaCharge);
         record_publish_event($sessionId, $session['page_slug'] ?: null, 'generate', 'refused', 'AI refused the request', $usage);
-        sse_event('error', ['code' => 'refused', 'message' => '这个请求不适合公开生成，请调整内容后再试。']);
+        sse_event('error', ['code' => 'refused', 'message' => t('api', 'refused', $locale)]);
         exit;
     }
 
@@ -104,11 +97,10 @@ try {
     $isAdult = !empty($data['is_adult']);
     $adultFlagCleared = $editPage && !empty($editPage['is_adult']) && !$isAdult;
     if ($isAdult) {
-        $html = inject_adult_gate($html, $pageSlug);
+        $html = inject_adult_gate($html, $pageSlug, normalize_locale(extract_html_lang($html)) ?: $locale);
     }
     $html = inject_generated_csp($html);
     $html = inject_generated_footer($html);
-    write_live_preview($sessionId, $html);
 
     sse_event('stage', ['stage' => 'writing']);
     $path = xlog_config('site_dir') . '/' . $pageSlug . '.html';
@@ -118,7 +110,7 @@ try {
 
     $title = extract_title($html) ?: 'AI Page';
     $type = infer_page_type($messages);
-    $lang = extract_html_lang($html) ?: 'zh-CN';
+    $lang = normalize_locale(extract_html_lang($html)) ?: $locale;
     $now = now_iso();
     $cost = (int)(($usage['input_tokens'] ?? 0) + ($usage['output_tokens'] ?? 0));
     if (db_one('SELECT slug FROM pages WHERE slug = ?', [$pageSlug])) {
@@ -150,7 +142,7 @@ try {
     refund_generate_charge($quotaCharge);
     record_publish_event($sessionId ?? null, isset($session) ? ($session['page_slug'] ?: null) : null, 'generate', 'failed', $e->getMessage(), $usage);
     error_log('publish failed: ' . $e->getMessage());
-    sse_event('error', ['code' => 'publish_failed', 'message' => friendly_publish_error($e)]);
+    sse_event('error', ['code' => 'publish_failed', 'message' => friendly_publish_error($e, $locale ?? resolve_locale())]);
 }
 
 function refund_generate_charge(&$charge) {
@@ -204,10 +196,11 @@ function live_preview_document($raw) {
         $clean = substr($clean, $pos);
     }
     if ($clean === '' || strpos($clean, '<') === false) {
-        $escaped = h($clean === '' ? '等待模型开始输出 HTML...' : $clean);
+        $locale = validate_lang($GLOBALS['xlog_publish_locale'] ?? resolve_locale());
+        $escaped = h($clean === '' ? t('app', 'previewWaitingRaw', $locale) : $clean);
         return <<<HTML
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="{$locale}">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
@@ -252,8 +245,8 @@ function inject_generated_csp($html) {
     return preg_replace('/<\/head>/i', $meta . "\n</head>", $html, 1);
 }
 
-function inject_adult_gate($html, $slug) {
-    $adult = build_adult_gate_parts('zh-CN', $slug, true);
+function inject_adult_gate($html, $slug, $locale = 'zh-CN') {
+    $adult = build_adult_gate_parts(validate_lang($locale), $slug, true);
     $headInsert = adult_gate_inline_css() . "\n" . $adult['boot_html'];
     $bodyInsert = $adult['body_boot_html'] . "\n" . $adult['gate_html'];
     $html = preg_replace('/<\/head>/i', $headInsert . "\n</head>", $html, 1);
@@ -316,15 +309,15 @@ function infer_page_type(array $messages) {
     return 'free';
 }
 
-function friendly_publish_error(Throwable $e) {
+function friendly_publish_error(Throwable $e, $locale = 'zh-CN') {
     $message = $e->getMessage();
-    if (stripos($message, 'External scripts') !== false) return '页面里包含外链脚本，已被安全策略拒绝。请让 AI 重新生成纯内联页面。';
-    if (stripos($message, 'External stylesheets') !== false) return '页面里包含外链样式表，已被安全策略拒绝。请让 AI 重新生成纯内联样式。';
-    if (stripos($message, 'Only xlog.ink site-assets') !== false) return '页面引用了非本站图片，已被安全策略拒绝。请重新生成或先上传图片。';
-    if (stripos($message, 'iframes') !== false || stripos($message, 'forms') !== false) return '页面包含 iframe 或表单，暂不允许发布。请换一种静态展示方式。';
-    if (stripos($message, 'complete HTML') !== false || stripos($message, 'DOCTYPE') !== false) return '模型没有返回完整 HTML，额度已退回。请再试一次或减少页面复杂度。';
-    if (stripos($message, 'Write failed') !== false) return '页面文件写入失败，额度已退回。请稍后重试。';
-    return '生成失败，额度已退回。请稍后重试，或减少页面内容后再生成。';
+    if (stripos($message, 'External scripts') !== false) return t('api', 'publishExternalScript', $locale);
+    if (stripos($message, 'External stylesheets') !== false) return t('api', 'publishExternalStyle', $locale);
+    if (stripos($message, 'Only xlog.ink site-assets') !== false) return t('api', 'publishExternalImage', $locale);
+    if (stripos($message, 'iframes') !== false || stripos($message, 'forms') !== false) return t('api', 'publishIframeForm', $locale);
+    if (stripos($message, 'complete HTML') !== false || stripos($message, 'DOCTYPE') !== false) return t('api', 'publishIncomplete', $locale);
+    if (stripos($message, 'Write failed') !== false) return t('api', 'publishWriteFailed', $locale);
+    return t('api', 'publishFailed', $locale);
 }
 
 function record_publish_event($sessionId, $slug, $kind, $status, $message = null, array $usage = [], $isAdult = false) {

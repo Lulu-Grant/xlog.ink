@@ -3,6 +3,8 @@ require_once __DIR__ . '/../includes/ai.php';
 
 require_method('POST');
 $data = json_input();
+$locale = resolve_locale($data['locale'] ?? null);
+set_locale_cookie($locale);
 $sessionId = trim($data['session_id'] ?? '');
 $message = trim($data['message'] ?? '');
 if (!preg_match('/^[a-f0-9]{32}$/', $sessionId)) api_error('bad_session', 'Invalid session');
@@ -10,12 +12,14 @@ if ($message === '') api_error('empty_message', 'Message required');
 
 $row = db_one('SELECT * FROM sessions WHERE id = ?', [$sessionId]);
 if (!$row) api_error('session_not_found', 'Session not found', 404);
-if (!session_access_allowed($row)) api_error('forbidden_session', '你不能使用这个会话。', 403);
+if (!session_access_allowed($row)) api_error('forbidden_session', t('api', 'forbiddenChatSession', $locale), 403);
+db_exec('UPDATE sessions SET locale = ?, updated_at = ? WHERE id = ?', [$locale, now_iso(), $sessionId]);
+$row['locale'] = $locale;
 
 $q = consume_quota('chat_turn');
 if (!$q['ok']) {
     sse_start();
-    sse_event('notice', ['type' => 'quota', 'identity' => $q['identity'], 'message' => '今日对话额度已用完。登录后可获得更高生成额度。']);
+    sse_event('notice', ['type' => 'quota', 'identity' => $q['identity'], 'message' => t('api', 'chatQuotaExceeded', $locale)]);
     sse_event('done', ['usage' => []]);
     exit;
 }
@@ -23,8 +27,11 @@ if (!$q['ok']) {
 append_session_message($sessionId, 'user', $message);
 $history = session_messages($sessionId) ?: [];
 $quota = quota_status('generate');
-$system = prompt_text('chat-system.txt') . "\n\n【当前状态】\n当前用户：" . $quota['identity'] . "，今日剩余生成额度：" . $quota['remaining'];
+$system = prompt_text('chat-system.txt')
+    . "\n\n" . t('prompt', 'chatLanguage', $locale)
+    . "\n\n" . t('prompt', 'status', $locale, ['identity' => $quota['identity'], 'remaining' => $quota['remaining']]);
 $modelMessages = [['role' => 'system', 'content' => $system]];
+$GLOBALS['xlog_chat_locale'] = $locale;
 $modelMessages = array_merge($modelMessages, truncate_messages_for_chat($history));
 
 sse_start();
@@ -64,7 +71,8 @@ function truncate_messages_for_chat(array $messages) {
     }
     $first = array_slice($messages, 0, 2);
     $last = array_slice($messages, -20);
-    $middle = [['role' => 'assistant', 'content' => '（中间较早对话已省略，继续基于最近上下文引导用户。）']];
+    $locale = $GLOBALS['xlog_chat_locale'] ?? resolve_locale();
+    $middle = [['role' => 'assistant', 'content' => t('prompt', 'truncated', $locale)]];
     return array_map('chat_model_message', array_merge($first, $middle, $last));
 }
 
