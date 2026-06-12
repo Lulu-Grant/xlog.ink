@@ -1180,6 +1180,11 @@ input:focus, textarea:focus { border-color: var(--acc); }
     grid-template-columns: auto minmax(0, 1fr) auto;
     padding: 8px 12px calc(8px + env(safe-area-inset-bottom));
   }
+  .is-ios .composer textarea,
+  .is-ios input,
+  .is-ios textarea {
+    font-size: 16px;
+  }
   .composer::after { left: 28px; }
   .upload-card { width: calc(100% - 15px); margin-left: 15px; }
   .upload-card-actions { grid-template-columns: 1fr; }

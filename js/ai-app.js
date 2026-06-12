@@ -17,6 +17,8 @@
   var locale = normalizeLocale(window.XLOG_LOCALE || document.body.dataset.locale || '');
   var i18n = window.XLOG_I18N || {};
   var coarsePointer = window.matchMedia('(pointer: coarse)').matches;
+  var isIOS = /iP(ad|hone|od)/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  if (isIOS) document.documentElement.classList.add('is-ios');
 
   var $ = function (s) { return document.querySelector(s); };
   var messages = $('#messages');
@@ -24,13 +26,13 @@
   var sendBtn = document.querySelector('#composer button[type="submit"]');
 
   function updateAppViewportHeight() {
-    var height = window.visualViewport && window.visualViewport.height ? window.visualViewport.height : window.innerHeight;
+    var height = (!isIOS && window.visualViewport && window.visualViewport.height) ? window.visualViewport.height : window.innerHeight;
     if (height > 0) document.documentElement.style.setProperty('--app-vh', height + 'px');
   }
   updateAppViewportHeight();
   window.addEventListener('resize', updateAppViewportHeight);
   window.addEventListener('orientationchange', updateAppViewportHeight);
-  if (window.visualViewport) {
+  if (window.visualViewport && !isIOS) {
     window.visualViewport.addEventListener('resize', updateAppViewportHeight);
     window.visualViewport.addEventListener('scroll', updateAppViewportHeight);
   }
@@ -1091,8 +1093,14 @@
     if (e.key === 'Enter') { e.preventDefault(); $('#verifyCodeBtn').click(); }
   });
   input.addEventListener('focus', function () {
-    updateAppViewportHeight();
-    setTimeout(function () { updateAppViewportHeight(); scrollDown(true); }, 80);
+    if (!isIOS) updateAppViewportHeight();
+    setTimeout(function () {
+      if (!isIOS) updateAppViewportHeight();
+      scrollDown(true);
+    }, isIOS ? 240 : 80);
+  });
+  input.addEventListener('blur', function () {
+    if (isIOS) setTimeout(updateAppViewportHeight, 180);
   });
   var localeSwitch = $('#localeSwitch');
   if (localeSwitch) {
