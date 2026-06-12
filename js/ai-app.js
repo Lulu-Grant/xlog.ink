@@ -200,13 +200,15 @@
         '<iframe class="live-preview-frame" title="' + escapeAttr(t('previewFrameTitle')) + '" sandbox="" referrerpolicy="no-referrer" hidden></iframe>' +
         '<div class="live-preview-note">' + escapeHtml(t('previewNote')) + '</div>' +
         '<div class="delivery-panel" hidden>' +
-        '<div class="url-box"></div>' +
         '<div class="delivery-body">' +
+        '<div class="delivery-qr-stack">' +
         '<canvas class="qr-canvas" width="180" height="180"></canvas>' +
+        '<div class="url-box"></div>' +
+        '</div>' +
         '<div class="delivery-actions">' +
-        '<button type="button" data-copy-url="1">' + escapeHtml(t('copyLink')) + '</button>' +
-        '<button type="button" data-download-qr="1">' + escapeHtml(t('downloadQr')) + '</button>' +
         '<a data-open-page="1" href="#" target="_blank" rel="noopener">' + escapeHtml(t('openPage')) + '</a>' +
+        '<button type="button" data-download-qr="1">' + escapeHtml(t('downloadQr')) + '</button>' +
+        '<button type="button" data-copy-url="1">' + escapeHtml(t('copyLink')) + '</button>' +
         '</div>' +
         '</div>' +
         '</div>');
