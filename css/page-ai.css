@@ -378,15 +378,7 @@ button:disabled { cursor: default; opacity: .45; }
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
-.msg.assistant::before {
-  content: "";
-  display: inline-block;
-  width: 42px;
-  height: 14px;
-  margin-right: 7px;
-  background: url("/assets/brand/xlog-prefix.svg") left 50% / contain no-repeat;
-  vertical-align: -2px;
-}
+.msg.assistant::before { display: none; }
 .msg.user {
   align-self: flex-end;
   width: auto;
