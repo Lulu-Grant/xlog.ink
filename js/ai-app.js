@@ -23,6 +23,18 @@
   var sendBtn = document.querySelector('#composer button[type="submit"]');
   var coarsePointer = window.matchMedia('(pointer: coarse)').matches;
 
+  function updateAppViewportHeight() {
+    var height = window.visualViewport && window.visualViewport.height ? window.visualViewport.height : window.innerHeight;
+    if (height > 0) document.documentElement.style.setProperty('--app-vh', height + 'px');
+  }
+  updateAppViewportHeight();
+  window.addEventListener('resize', updateAppViewportHeight);
+  window.addEventListener('orientationchange', updateAppViewportHeight);
+  if (window.visualViewport) {
+    window.visualViewport.addEventListener('resize', updateAppViewportHeight);
+    window.visualViewport.addEventListener('scroll', updateAppViewportHeight);
+  }
+
   var jumpBtn = document.createElement('button');
   jumpBtn.type = 'button';
   jumpBtn.className = 'jump-latest';
@@ -995,6 +1007,10 @@
   });
   $('#loginCode').addEventListener('keydown', function (e) {
     if (e.key === 'Enter') { e.preventDefault(); $('#verifyCodeBtn').click(); }
+  });
+  input.addEventListener('focus', function () {
+    updateAppViewportHeight();
+    setTimeout(function () { updateAppViewportHeight(); scrollDown(true); }, 80);
   });
   var localeSwitch = $('#localeSwitch');
   if (localeSwitch) {
