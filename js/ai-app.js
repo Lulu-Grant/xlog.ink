@@ -89,6 +89,14 @@
       '</div>');
   }
 
+  function renderHeroLogo() {
+    if (document.querySelector('.hero-logo-card')) return;
+    var card = document.createElement('div');
+    card.className = 'hero-logo-card';
+    card.innerHTML = '<img src="/assets/brand/xlog-animation-v5.svg" alt="" aria-hidden="true">';
+    messages.appendChild(card);
+  }
+
   function showGenerateCard(reason) {
     if (!state.sessionId || state.readyShown) return;
     state.readyShown = true;
@@ -445,6 +453,7 @@
     } else {
       messages.classList.add('is-hero');
       input.placeholder = '一句话描述你想要的页面…';
+      renderHeroLogo();
       addMessage('assistant', data.greeting || '你想创建什么类型的页面？可以选择名片、宣传海报、文章页面、活动页面，或者直接自由描述。');
       renderPresetCard();
     }

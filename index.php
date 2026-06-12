@@ -15,7 +15,7 @@ $turnstileSiteKey = xlog_config('turnstile.site_key', '');
   <meta property="og:title" content="xlog.ink - AI 个人页面生成">
   <meta property="og:description" content="聊天、上传图片、生成自由 HTML 页面，并自动分发到二级域名。">
   <meta property="og:image" content="/assets/og/cover.jpg">
-  <link rel="stylesheet" href="/css/page-ai.css?v=20260612v18">
+  <link rel="stylesheet" href="/css/page-ai.css?v=20260612v19">
   <link rel="icon" href="/favicon.ico">
   <?php if ($turnstileEnabled && $turnstileSiteKey !== ''): ?>
   <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
@@ -74,6 +74,6 @@ $turnstileSiteKey = xlog_config('turnstile.site_key', '');
 
   </main>
   <script src="/js/qrcode.min.js?v=1.4.4"></script>
-  <script src="/js/ai-app.js?v=20260612v25"></script>
+  <script src="/js/ai-app.js?v=20260612v26"></script>
 </body>
 </html>

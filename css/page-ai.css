@@ -310,6 +310,23 @@ button:not(:disabled):not(.jump-latest):active { transform: scale(.98); }
 .messages.is-hero {
   justify-content: center;
 }
+.hero-logo-card {
+  display: none;
+}
+.messages.is-hero .hero-logo-card {
+  width: min(360px, 72vw);
+  aspect-ratio: 8 / 5;
+  display: grid;
+  place-items: center;
+  align-self: center;
+  margin: 0 auto 8px;
+  pointer-events: none;
+}
+.hero-logo-card img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
 .messages.is-hero .msg.assistant {
   margin: 0 auto;
   max-width: 600px;
@@ -851,6 +868,10 @@ input:focus, textarea:focus { border-color: var(--violet); }
     padding: 10px 14px;
   }
   .messages.is-hero .preset-row { justify-content: flex-start; }
+  .messages.is-hero .hero-logo-card {
+    width: min(310px, 82vw);
+    margin-bottom: 4px;
+  }
   .my-pages-panel {
     max-height: 42vh;
     padding: 10px 14px;
