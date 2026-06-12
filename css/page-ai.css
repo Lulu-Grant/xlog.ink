@@ -358,13 +358,19 @@ button:disabled { cursor: default; opacity: .45; }
   font-weight: 700;
 }
 .msg.user {
-  border-left-color: var(--acc);
+  align-self: flex-end;
+  width: auto;
+  max-width: min(78%, 520px);
+  padding: 8px 12px;
+  border-left: 0;
+  border: var(--bw) solid rgba(122, 93, 244, .25);
+  border-radius: 8px 8px 0 8px;
+  background: var(--user);
   color: var(--ink);
+  text-align: left;
 }
 .msg.user::before {
-  content: "> ";
-  color: var(--acc);
-  font-weight: 700;
+  content: "";
 }
 .msg.system {
   align-self: stretch;
