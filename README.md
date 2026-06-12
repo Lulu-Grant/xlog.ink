@@ -57,6 +57,22 @@ php scripts/build-recent.php
 
 Nginx 参考配置见 `docs/nginx-v2-snippet.conf`。
 
+## 生产同步
+
+同步代码请使用仓库脚本，脚本会排除 `data/`、`site/`、`site-assets/` 运行时目录，并在远端修正 SQLite 与上传目录权限：
+
+```bash
+scripts/deploy-code.sh
+```
+
+可用环境变量覆盖默认服务器：
+
+```bash
+XLOG_DEPLOY_REMOTE=root@example.com XLOG_DEPLOY_DEST=/www/wwwroot/xlog.ink XLOG_DEPLOY_KEY=/path/to/key scripts/deploy-code.sh
+```
+
+不要直接用保留本机属主的 `rsync -a` 覆盖生产目录；否则 `data/` 可能变成不可写，导致 `attempt to write a readonly database`。
+
 生产 Nginx 必须屏蔽主域内部目录，至少包含：
 
 ```nginx
