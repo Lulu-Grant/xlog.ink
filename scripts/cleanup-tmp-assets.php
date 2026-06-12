@@ -32,3 +32,19 @@ $oldSessions = db_exec(
     ['done', $sessionCutoff]
 )->rowCount();
 echo "Removed stale unfinished sessions: {$oldSessions}\n";
+
+$oldMailEvents = db_exec('DELETE FROM mail_events WHERE created_at < ?', [$sessionCutoff])->rowCount();
+echo "Removed old mail events: {$oldMailEvents}\n";
+
+$orphanDoneSessions = db_exec(
+    'DELETE FROM sessions
+     WHERE state = ?
+       AND updated_at < ?
+       AND NOT EXISTS (
+         SELECT 1 FROM pages
+         WHERE pages.session_id = sessions.id
+            OR pages.slug = sessions.page_slug
+       )',
+    ['done', $sessionCutoff]
+)->rowCount();
+echo "Removed orphan done sessions: {$orphanDoneSessions}\n";

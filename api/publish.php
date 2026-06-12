@@ -102,6 +102,7 @@ try {
     $pageSlug = $editPage ? $session['page_slug'] : generate_unique_slug();
     $html = move_session_assets_to_slug($sessionId, $pageSlug, $html);
     $isAdult = !empty($data['is_adult']);
+    $adultFlagCleared = $editPage && !empty($editPage['is_adult']) && !$isAdult;
     if ($isAdult) {
         $html = inject_adult_gate($html, $pageSlug);
     }
@@ -130,6 +131,9 @@ try {
     }
     db_exec('UPDATE sessions SET page_slug = ?, state = ?, updated_at = ? WHERE id = ?', [$pageSlug, 'done', $now, $sessionId]);
     record_publish_event($sessionId, $pageSlug, 'generate', 'success', null, $usage, $isAdult);
+    if ($adultFlagCleared) {
+        record_publish_event($sessionId, $pageSlug, 'adult_flag', 'notice', 'adult_flag_cleared', [], false);
+    }
     $quotaCharge = null;
     try {
         build_recent_html_file();

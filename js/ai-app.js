@@ -285,7 +285,11 @@
   }
 
   function isPublishIntent(text) {
-    return /(直接|立即|现在|确认|可以|重新|再次|再|开始)?\s*(生成|发布|上线|创建页面|开始生成|开始做|重新生成|再做一个)/.test(text || '');
+    text = text || '';
+    if (/(不要|别|不用|不必|暂不|先不|无需|取消)\s*(生成|发布|上线|创建页面|开始生成|开始做|重新生成|再做一个)/.test(text)) {
+      return false;
+    }
+    return /(直接|立即|现在|确认|可以|重新|再次|再|开始)?\s*(生成|发布|上线|创建页面|开始生成|开始做|重新生成|再做一个)/.test(text);
   }
 
   function handleAction(action, userPublishIntent) {

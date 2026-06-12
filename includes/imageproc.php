@@ -112,7 +112,13 @@ function gd_apply_exif_orientation($im, $src) {
         $im = imagerotate($im, 180, 0);
     } elseif ($orientation === 4 && function_exists('imageflip')) {
         imageflip($im, IMG_FLIP_VERTICAL);
+    } elseif ($orientation === 5 && function_exists('imageflip')) {
+        imageflip($im, IMG_FLIP_HORIZONTAL);
+        $im = imagerotate($im, 90, 0);
     } elseif ($orientation === 6) {
+        $im = imagerotate($im, -90, 0);
+    } elseif ($orientation === 7 && function_exists('imageflip')) {
+        imageflip($im, IMG_FLIP_HORIZONTAL);
         $im = imagerotate($im, -90, 0);
     } elseif ($orientation === 8) {
         $im = imagerotate($im, 90, 0);
@@ -123,6 +129,7 @@ function gd_apply_exif_orientation($im, $src) {
 function move_session_assets_to_slug($sessionId, $slug, $html) {
     $tmpDir = image_session_dir($sessionId);
     $finalDir = xlog_config('asset_dir') . '/' . $slug;
+    $mappings = [];
     if (is_dir($tmpDir)) {
         if (!is_dir($finalDir)) @mkdir($finalDir, 0755, true);
         $oldBase = rtrim(xlog_config('base_url'), '/') . '/site-assets/tmp/' . $sessionId . '/';
@@ -133,16 +140,45 @@ function move_session_assets_to_slug($sessionId, $slug, $html) {
             if (file_exists($finalDir . '/' . $targetName)) {
                 $targetName = substr($sessionId, 0, 8) . '-' . $basename;
             }
-            @rename($file, $finalDir . '/' . $targetName);
-            $html = str_replace($oldBase . $basename, $newBase . $targetName, $html);
+            if (!@rename($file, $finalDir . '/' . $targetName)) {
+                throw new RuntimeException('Could not move uploaded image asset');
+            }
+            $oldRel = '/site-assets/tmp/' . $sessionId . '/' . $basename;
+            $newRel = '/site-assets/' . $slug . '/' . $targetName;
+            $oldAbs = $oldBase . $basename;
+            $newAbs = $newBase . $targetName;
+            $mappings[$oldAbs] = $newAbs;
+            $mappings[$oldRel] = $newRel;
+            $html = str_replace([$oldAbs, $oldRel], [$newAbs, $newRel], $html);
             db_exec(
                 'UPDATE images SET slug = ?, path = ? WHERE session_id = ? AND path = ?',
-                [$slug, '/site-assets/' . $slug . '/' . $targetName, $sessionId, '/site-assets/tmp/' . $sessionId . '/' . $basename]
+                [$slug, $newRel, $sessionId, $oldRel]
             );
         }
         @rmdir($tmpDir);
     }
+    if ($mappings) {
+        rewrite_session_message_asset_urls($sessionId, $mappings);
+    }
     return $html;
+}
+
+function rewrite_session_message_asset_urls($sessionId, array $mappings) {
+    $messages = session_messages($sessionId);
+    if (!is_array($messages) || !$messages) return;
+    $changed = false;
+    foreach ($messages as &$message) {
+        $content = (string)($message['content'] ?? '');
+        $updated = str_replace(array_keys($mappings), array_values($mappings), $content);
+        if ($updated !== $content) {
+            $message['content'] = $updated;
+            $changed = true;
+        }
+    }
+    unset($message);
+    if ($changed) {
+        save_session_messages($sessionId, $messages);
+    }
 }
 
 function session_images_context($sessionId) {
