@@ -19,7 +19,7 @@ $allAppCopy = get_i18n()['app'];
   <meta property="og:title" content="<?php echo h($appCopy['pageTitle']); ?>">
   <meta property="og:description" content="<?php echo h($appCopy['ogDescription']); ?>">
   <meta property="og:image" content="/assets/og/cover.jpg">
-  <link rel="stylesheet" href="/css/page-ai.css?v=20260613v36">
+  <link rel="stylesheet" href="/css/page-ai.css?v=20260613v37">
   <link rel="icon" href="/favicon.ico">
   <?php if ($turnstileEnabled && $turnstileSiteKey !== ''): ?>
   <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
