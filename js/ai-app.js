@@ -328,14 +328,25 @@
       '<strong>' + escapeHtml(t('uploadTitle')) + '</strong>' +
       '<p>' + escapeHtml(t('uploadBody')) + '</p>' +
       '<input class="upload-caption" type="text" placeholder="' + escapeAttr(t('uploadCaption')) + '" value="' + escapeAttr(params.hint || '') + '">' +
+      '<div class="upload-file-name" aria-live="polite">' + escapeHtml(t('noImageSelected')) + '</div>' +
       '<div class="upload-card-actions">' +
       '<label>' + escapeHtml(t('chooseImage')) + '<input class="upload-file" type="file" accept="image/*"></label>' +
+      '<button type="button" class="submit-upload" disabled>' + escapeHtml(t('submitImage')) + '</button>' +
       '<button type="button" class="skip-upload">' + escapeHtml(t('skipUpload')) + '</button>' +
       '</div>';
     messages.appendChild(card);
     scrollDown(false);
+    var selectedFile = null;
+    var fileName = card.querySelector('.upload-file-name');
+    var submitBtn = card.querySelector('.submit-upload');
     card.querySelector('.upload-file').addEventListener('change', function (e) {
-      uploadImage(e.target.files[0], card.querySelector('.upload-caption').value.trim(), card.dataset.slot || '', card);
+      selectedFile = e.target.files && e.target.files[0] ? e.target.files[0] : null;
+      if (fileName) fileName.textContent = selectedFile ? t('selectedImage', { name: selectedFile.name }) : t('noImageSelected');
+      if (submitBtn) submitBtn.disabled = !selectedFile;
+    });
+    submitBtn.addEventListener('click', function () {
+      if (!selectedFile || card.dataset.uploading === '1') return;
+      uploadImage(selectedFile, card.querySelector('.upload-caption').value.trim(), card.dataset.slot || '', card);
     });
     card.querySelector('.skip-upload').addEventListener('click', function () {
       card.dataset.active = '0';
@@ -794,6 +805,10 @@
 
   function uploadImage(file, caption, slot, card) {
     if (!state.sessionId || !file) return;
+    if (card) {
+      card.dataset.uploading = '1';
+      card.querySelectorAll('input, button').forEach(function (el) { el.disabled = true; });
+    }
     var fd = new FormData();
     fd.append('session_id', state.sessionId);
     fd.append('caption', caption || '');
@@ -807,6 +822,14 @@
         card.innerHTML = '<strong>' + escapeHtml(t('imageUploaded')) + '</strong><p>' + escapeHtml(caption || t('noCaption')) + '</p><img src="' + escapeAttr(d.url) + '" alt="" style="width:96px;height:96px;object-fit:cover;border-radius:12px">';
       }
       toast(t('imageUploadedToast'));
+      sendMessage(t('imageUploadedChatMessage', { caption: caption || t('noCaption') }));
+    }).finally(function () {
+      if (card && card.dataset.active === '1') {
+        card.dataset.uploading = '0';
+        card.querySelectorAll('input, button').forEach(function (el) { el.disabled = false; });
+        var submitBtn = card.querySelector('.submit-upload');
+        if (submitBtn) submitBtn.disabled = !file;
+      }
     });
   }
 
