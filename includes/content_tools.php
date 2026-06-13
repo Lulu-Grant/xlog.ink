@@ -16,19 +16,19 @@ function adult_keyword_score($text) {
     $score = 0.0;
     $hits = [];
     foreach ($critical as $kw) {
-        if (mb_stripos($text, $kw, 0, 'UTF-8') !== false) {
+        if (adult_keyword_hit($text, $kw)) {
             $score += 0.9;
             $hits[] = $kw;
         }
     }
     foreach ($strong as $kw) {
-        if (mb_stripos($text, $kw, 0, 'UTF-8') !== false) {
+        if (adult_keyword_hit($text, $kw)) {
             $score += 0.45;
             $hits[] = $kw;
         }
     }
     foreach ($soft as $kw) {
-        if (mb_stripos($text, $kw, 0, 'UTF-8') !== false) {
+        if (adult_keyword_hit($text, $kw)) {
             $score += 0.05;
             $hits[] = $kw;
         }
@@ -37,6 +37,14 @@ function adult_keyword_score($text) {
         'score' => min(1.0, $score),
         'reason' => $hits ? ('matched:' . implode(',', array_slice(array_unique($hits), 0, 6))) : 'clean',
     ];
+}
+
+function adult_keyword_hit($text, $keyword) {
+    if (preg_match('/^[a-z0-9 ]+$/i', $keyword)) {
+        $pattern = '/(?<![a-z0-9])' . preg_quote($keyword, '/') . '(?![a-z0-9])/iu';
+        return (bool)preg_match($pattern, $text);
+    }
+    return mb_stripos($text, $keyword, 0, 'UTF-8') !== false;
 }
 
 function assess_session_adult($sessionId, array $messages) {
