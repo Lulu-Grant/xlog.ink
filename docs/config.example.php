@@ -33,6 +33,8 @@ return [
             'key' => '<GEN_API_KEY>',
             'max_tokens' => 49152,
             'stream' => true,
+            'timeout' => 180,
+            'low_speed_time' => 35,
             'fallbacks' => [
                 [
                     'base_url' => 'https://api.tu-zi.com',
@@ -41,6 +43,8 @@ return [
                     'key' => '<GEN_FALLBACK_API_KEY>',
                     'max_tokens' => 49152,
                     'stream' => true,
+                    'timeout' => 240,
+                    'low_speed_time' => 45,
                 ],
             ],
         ],

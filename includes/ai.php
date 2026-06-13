@@ -369,10 +369,10 @@ function ai_stream_openai(array $cfg, array $messages, callable $onDelta) {
             'max_tokens' => (int)$cfg['max_tokens'],
             'stream' => false,
         ];
-        $data = ai_curl_json(rtrim($cfg['base_url'], '/') . '/v1/chat/completions', [
+        $data = ai_curl_json_timeout(rtrim($cfg['base_url'], '/') . '/v1/chat/completions', [
             'Authorization: Bearer ' . $cfg['key'],
             'Content-Type: application/json',
-        ], $payload);
+        ], $payload, (int)($cfg['timeout'] ?? 120));
         $text = $data['choices'][0]['message']['content'] ?? '';
         if ($text === '') {
             throw new RuntimeException('AI gateway returned empty content');
@@ -397,7 +397,7 @@ function ai_stream_openai(array $cfg, array $messages, callable $onDelta) {
     ], $payload, function ($data) use ($onDelta) {
         $delta = $data['choices'][0]['delta']['content'] ?? '';
         if ($delta !== '') $onDelta($delta);
-    });
+    }, (int)($cfg['timeout'] ?? 180), (int)($cfg['low_speed_time'] ?? 45));
 }
 
 function ai_stream_anthropic(array $cfg, array $messages, callable $onDelta) {
@@ -426,10 +426,10 @@ function ai_stream_anthropic(array $cfg, array $messages, callable $onDelta) {
         $delta = $data['delta']['text'] ?? '';
         if ($delta === '' && isset($data['content_block']['text'])) $delta = $data['content_block']['text'];
         if ($delta !== '') $onDelta($delta);
-    });
+    }, (int)($cfg['timeout'] ?? 260), (int)($cfg['low_speed_time'] ?? 45));
 }
 
-function ai_curl_sse($url, array $headers, array $payload, callable $onData) {
+function ai_curl_sse($url, array $headers, array $payload, callable $onData, $timeout = 260, $lowSpeedTime = 45) {
     $usage = ['input_tokens' => 0, 'output_tokens' => 0];
     $buffer = '';
     $ch = curl_init($url);
@@ -438,8 +438,10 @@ function ai_curl_sse($url, array $headers, array $payload, callable $onData) {
         CURLOPT_HTTPHEADER => $headers,
         CURLOPT_POSTFIELDS => json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
         CURLOPT_RETURNTRANSFER => false,
-        CURLOPT_TIMEOUT => 260,
+        CURLOPT_TIMEOUT => (int)$timeout,
         CURLOPT_CONNECTTIMEOUT => 20,
+        CURLOPT_LOW_SPEED_LIMIT => 1,
+        CURLOPT_LOW_SPEED_TIME => max(10, (int)$lowSpeedTime),
         CURLOPT_WRITEFUNCTION => function ($ch, $chunk) use (&$buffer, &$usage, $onData) {
             $buffer .= $chunk;
             while (($pos = strpos($buffer, "\n\n")) !== false) {
