@@ -105,19 +105,54 @@ function ai_generate_image_with_config(array $cfg, $prompt, array $options = [])
         'Content-Type: application/json',
     ], $payload, 180);
     $b64 = $data['data'][0]['b64_json'] ?? '';
-    if ($b64 === '') {
+    $url = $data['data'][0]['url'] ?? '';
+    if ($b64 === '' && $url === '') {
         throw new RuntimeException('Image API returned no image data');
     }
-    $bytes = base64_decode($b64, true);
-    if ($bytes === false || $bytes === '') {
-        throw new RuntimeException('Image API returned invalid image data');
-    }
     $mime = $outputFormat === 'png' ? 'image/png' : ($outputFormat === 'jpeg' ? 'image/jpeg' : 'image/webp');
+    if ($b64 !== '') {
+        $bytes = base64_decode($b64, true);
+        if ($bytes === false || $bytes === '') {
+            throw new RuntimeException('Image API returned invalid image data');
+        }
+    } else {
+        [$bytes, $downloadMime] = ai_download_image_url($url);
+        if ($downloadMime !== '') $mime = $downloadMime;
+    }
     return [
         'bytes' => $bytes,
         'mime' => $mime,
         'model' => $data['model'] ?? $cfg['model'],
     ];
+}
+
+function ai_download_image_url($url) {
+    $url = trim((string)$url);
+    if (!preg_match('/^https:\\/\\//i', $url)) {
+        throw new RuntimeException('Image API returned unsupported image URL');
+    }
+    $ch = curl_init($url);
+    curl_setopt_array($ch, [
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_FOLLOWLOCATION => true,
+        CURLOPT_MAXREDIRS => 3,
+        CURLOPT_TIMEOUT => 120,
+        CURLOPT_CONNECTTIMEOUT => 20,
+    ]);
+    $body = curl_exec($ch);
+    $err = curl_error($ch);
+    $status = curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
+    $mime = (string)curl_getinfo($ch, CURLINFO_CONTENT_TYPE);
+    if (PHP_VERSION_ID < 80500) curl_close($ch);
+    if ($body === false || $status >= 400 || $body === '') {
+        throw new RuntimeException('Could not download generated image: ' . ($err ?: 'HTTP ' . $status));
+    }
+    $mime = strtolower(trim(explode(';', $mime)[0] ?? ''));
+    if (!in_array($mime, ['image/png', 'image/jpeg', 'image/webp'], true)) {
+        $info = @getimagesizefromstring($body);
+        $mime = is_array($info) ? (string)($info['mime'] ?? '') : '';
+    }
+    return [$body, $mime];
 }
 
 function ai_moderate_image($imagePath, $mime, $context = '') {
