@@ -240,6 +240,7 @@
         buildPreviewPlaceholder() +
         '<div class="final-preview-shot" hidden>' +
         '<img class="final-preview-image" alt="' + escapeAttr(t('previewFrameTitle')) + '" hidden>' +
+        '<iframe class="live-preview-frame" title="' + escapeAttr(t('previewFrameTitle')) + '" loading="lazy" sandbox="allow-scripts allow-same-origin" hidden></iframe>' +
         '<div class="final-preview-fallback" hidden>' +
         '<span>' + escapeHtml(t('previewWaitingTitle')) + '</span>' +
         '<small>' + escapeHtml(t('finalPreviewNote')) + '</small>' +
@@ -266,9 +267,12 @@
   }
 
   function startGenerationPreview() {
-    if (state.previewCard && state.previewCard.classList.contains('is-final')) {
-      state.previewCard = null;
+    if (state.previewTimer) clearInterval(state.previewTimer);
+    state.previewTimer = null;
+    if (state.previewCard && document.body.contains(state.previewCard)) {
+      state.previewCard.classList.add('is-stopped');
     }
+    state.previewCard = null;
     var card = ensureLivePreviewCard();
     card.classList.remove('is-final', 'delivery-card', 'is-previewing', 'is-stopped');
     delete card.dataset.pageUrl;
@@ -282,13 +286,18 @@
       image.hidden = true;
       image.removeAttribute('src');
     }
+    var frame = card.querySelector('.live-preview-frame');
+    if (frame) {
+      frame.hidden = true;
+      frame.removeAttribute('src');
+    }
     var fallback = card.querySelector('.final-preview-fallback');
     if (fallback) fallback.hidden = true;
     var note = card.querySelector('.live-preview-note');
     if (note) note.textContent = t('previewNote');
     var panel = card.querySelector('.delivery-panel');
     if (panel) panel.hidden = true;
-    scrollDown(false);
+    scrollDown(true);
   }
 
   function finalizeLivePreview(url, pageImageUrl) {
@@ -306,17 +315,28 @@
     var shot = card.querySelector('.final-preview-shot');
     if (shot) shot.hidden = false;
     var image = card.querySelector('.final-preview-image');
+    var frame = card.querySelector('.live-preview-frame');
     var fallback = card.querySelector('.final-preview-fallback');
     if (image && pageImageUrl) {
       image.src = pageImageUrl;
       image.hidden = false;
+      if (frame) {
+        frame.hidden = true;
+        frame.removeAttribute('src');
+      }
       if (fallback) fallback.hidden = true;
     } else {
       if (image) {
         image.hidden = true;
         image.removeAttribute('src');
       }
-      if (fallback) fallback.hidden = false;
+      if (frame) {
+        frame.src = url;
+        frame.hidden = false;
+        if (fallback) fallback.hidden = true;
+      } else if (fallback) {
+        fallback.hidden = false;
+      }
     }
     var note = card.querySelector('.live-preview-note');
     if (note) note.textContent = t('finalPreviewNote');
@@ -333,7 +353,7 @@
       var downloadBtn = card.querySelector('button[data-download-qr]');
       if (downloadBtn) downloadBtn.hidden = true;
     }
-    scrollDown(false);
+    scrollDown(true);
   }
 
   function updateLivePreviewStatus(text) {

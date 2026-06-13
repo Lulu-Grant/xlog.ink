@@ -98,8 +98,9 @@ function assess_uploaded_image_adult(array $file, $caption = '', $processedPath 
             }
         } catch (Throwable $e) {
             error_log('image moderation failed: ' . $e->getMessage());
-            $score = max($score, 0.55);
-            $reason = 'visual_error:' . mb_substr($e->getMessage(), 0, 120, 'UTF-8');
+            $reason = $score >= 0.55
+                ? 'text:' . $result['reason'] . '; visual_error_default_non_adult'
+                : 'visual_error_default_non_adult:' . mb_substr($e->getMessage(), 0, 120, 'UTF-8');
         }
     }
     return [
