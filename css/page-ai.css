@@ -614,17 +614,6 @@ button:disabled { cursor: default; opacity: .45; }
   color: var(--panel);
 }
 
-.adult-toggle {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  color: var(--muted);
-  font-size: 12.5px;
-}
-.adult-toggle input {
-  width: auto;
-  accent-color: var(--acc);
-}
 .turnstile-box {
   min-height: 65px;
 }

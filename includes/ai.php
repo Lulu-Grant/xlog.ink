@@ -232,6 +232,70 @@ function ai_moderate_image($imagePath, $mime, $context = '') {
     return ai_parse_moderation_json($text);
 }
 
+function ai_moderate_text($text) {
+    if (!ai_has_key('moderation')) {
+        return null;
+    }
+    $text = mb_substr(trim((string)$text), 0, 8000, 'UTF-8');
+    if ($text === '') {
+        return ['score' => 0.0, 'reason' => 'openai_moderation:empty_text'];
+    }
+    $cfg = ai_config('moderation');
+    $format = $cfg['format'] ?? 'openai';
+    if ($format === 'openai_moderation') {
+        return ai_openai_moderate_text($cfg, $text);
+    }
+    if ($format === 'anthropic') {
+        $payload = [
+            'model' => $cfg['model'],
+            'max_tokens' => (int)($cfg['max_tokens'] ?? 512),
+            'system' => 'You are a strict content safety classifier. Output JSON only.',
+            'messages' => [[
+                'role' => 'user',
+                'content' => "Assess whether this text describes or requests adult/18+ sexual content for a public web page.\n"
+                    . "Return only compact JSON with keys: adult_score (number 0-1), reason (short string).\n"
+                    . "Score 0.55 or above means adult gate should be enabled.\n\nText:\n" . $text,
+            ]],
+        ];
+        $data = ai_curl_json($cfg['base_url'] . '/v1/messages', [
+            'x-api-key: ' . $cfg['key'],
+            'anthropic-version: 2023-06-01',
+            'Content-Type: application/json',
+        ], $payload);
+        $out = '';
+        foreach (($data['content'] ?? []) as $block) {
+            if (($block['type'] ?? '') === 'text') $out .= $block['text'] ?? '';
+        }
+        return ai_parse_moderation_json($out);
+    }
+    $payload = [
+        'model' => $cfg['model'],
+        'messages' => [
+            ['role' => 'system', 'content' => 'You are a strict content safety classifier. Output JSON only.'],
+            ['role' => 'user', 'content' => "Assess whether this text describes or requests adult/18+ sexual content for a public web page. Return JSON with adult_score and reason.\n\n" . $text],
+        ],
+        'max_tokens' => (int)($cfg['max_tokens'] ?? 512),
+        'stream' => false,
+    ];
+    $data = ai_curl_json($cfg['base_url'] . '/v1/chat/completions', [
+        'Authorization: Bearer ' . $cfg['key'],
+        'Content-Type: application/json',
+    ], $payload);
+    return ai_parse_moderation_json($data['choices'][0]['message']['content'] ?? '');
+}
+
+function ai_openai_moderate_text(array $cfg, $text) {
+    $payload = [
+        'model' => $cfg['model'],
+        'input' => mb_substr((string)$text, 0, 8000, 'UTF-8'),
+    ];
+    $data = ai_curl_json(rtrim($cfg['base_url'], '/') . '/v1/moderations', [
+        'Authorization: Bearer ' . $cfg['key'],
+        'Content-Type: application/json',
+    ], $payload);
+    return ai_openai_moderation_result($data['results'][0] ?? []);
+}
+
 function ai_openai_moderate_image(array $cfg, $imageBytes, $mime, $context = '') {
     $input = [];
     $context = trim((string)$context);
@@ -255,7 +319,10 @@ function ai_openai_moderate_image(array $cfg, $imageBytes, $mime, $context = '')
         'Authorization: Bearer ' . $cfg['key'],
         'Content-Type: application/json',
     ], $payload);
-    $result = $data['results'][0] ?? [];
+    return ai_openai_moderation_result($data['results'][0] ?? []);
+}
+
+function ai_openai_moderation_result(array $result) {
     $scores = $result['category_scores'] ?? [];
     $categories = $result['categories'] ?? [];
     $sexual = (float)($scores['sexual'] ?? 0);

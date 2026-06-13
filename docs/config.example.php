@@ -12,15 +12,15 @@ return [
     'ai' => [
         'base_url' => 'https://api.3s3.org',
         'chat' => [
-            'base_url' => 'https://api.tu-zi.com',
-            'model' => 'gpt-5.4-mini',
+            'base_url' => 'https://api.3s3.org',
+            'model' => 'google/gemma-4-E4B-it',
             'format' => 'openai',
             'key' => '<CHAT_API_KEY>',
             'max_tokens' => 1024,
             'fallbacks' => [
                 [
                     'base_url' => 'https://api.3s3.org',
-                    'model' => 'google/gemma-4-26B-A4B-it',
+                    'model' => 'gpt-5.4-mini',
                     'format' => 'openai',
                     'key' => '<CHAT_FALLBACK_API_KEY>',
                     'max_tokens' => 1024,
@@ -28,20 +28,20 @@ return [
             ],
         ],
         'gen' => [
-            'model' => 'claude-sonnet-4-6',
-            'format' => 'anthropic',
+            'model' => 'Qwen/Qwen3.6-35B-A3B',
+            'format' => 'openai',
             'key' => '<GEN_API_KEY>',
-            'max_tokens' => 49152,
+            'max_tokens' => 16384,
             'stream' => true,
             'timeout' => 180,
             'low_speed_time' => 35,
             'fallbacks' => [
                 [
-                    'base_url' => 'https://api.tu-zi.com',
-                    'model' => 'gpt-5.5',
+                    'base_url' => 'https://api.3s3.org',
+                    'model' => 'gpt-5.4',
                     'format' => 'openai',
                     'key' => '<GEN_FALLBACK_API_KEY>',
-                    'max_tokens' => 49152,
+                    'max_tokens' => 16384,
                     'stream' => true,
                     'timeout' => 240,
                     'low_speed_time' => 45,
@@ -63,6 +63,10 @@ return [
                     'model' => 'gpt-image-2',
                     'format' => 'openai_image',
                     'key' => '<IMAGE_FALLBACK_API_KEY>',
+                    'size' => '1024x1024',
+                    'quality' => 'low',
+                    'output_format' => 'webp',
+                    'max_tokens' => 0,
                 ],
             ],
         ],
@@ -88,11 +92,14 @@ return [
         'generate_credit_cost' => 1,
     ],
     'admin' => [
+        // Required in production. Do not rely on localhost fallback outside local development.
         'token' => '<ADMIN_DASHBOARD_TOKEN>',
         'max_attempts' => 8,
         'lock_seconds' => 900,
     ],
     'analytics' => [
         'salt' => '<RANDOM_ANALYTICS_HASH_SALT>',
+        'visit_ip_minute_limit' => 120,
+        'visit_retention_days' => 90,
     ],
 ];

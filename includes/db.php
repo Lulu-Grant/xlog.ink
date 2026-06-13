@@ -146,6 +146,8 @@ CREATE TABLE IF NOT EXISTS page_visits (
 CREATE INDEX IF NOT EXISTS idx_page_visits_slug_created ON page_visits(slug, created_at);
 CREATE INDEX IF NOT EXISTS idx_page_visits_slug_date ON page_visits(slug, date);
 CREATE INDEX IF NOT EXISTS idx_page_visits_date ON page_visits(date);
+CREATE INDEX IF NOT EXISTS idx_page_visits_ip_created ON page_visits(ip_hash, created_at);
+CREATE INDEX IF NOT EXISTS idx_page_visits_slug_ip_created ON page_visits(slug, ip_hash, created_at);
 CREATE TABLE IF NOT EXISTS admin_login_attempts (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     ip_hash TEXT NOT NULL,

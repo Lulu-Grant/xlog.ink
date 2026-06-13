@@ -30,14 +30,14 @@
 
 本轮识别到的线上同配置：
 
-- Chat：`https://api.3s3.org` / `google/gemma-4-26B-A4B-it` / `openai`
-- Generate：`https://api.3s3.org` / `Qwen/Qwen3.6-35B-A3B` / `openai`
-- Image：本地配置补齐 `gpt-image-2`
+- Chat：`https://api.3s3.org` / `google/gemma-4-E4B-it` / `openai`，备用 `gpt-5.4-mini`
+- Generate：`https://api.3s3.org` / `Qwen/Qwen3.6-35B-A3B` / `openai`，备用 `gpt-5.4`
+- Image：`https://api.tu-zi.com` / `gpt-image-2`，备用 `https://api.3s3.org` / `gpt-image-2`
 - Moderation：本地配置补齐 `omni-moderation-latest`
 - SMTP：`smtpdm-ap-southeast-1.aliyun.com:465`
 - Turnstile：disabled
 
-说明：线上配置文件本身主要包含 chat/gen/SMTP；本地 `config.php` 仍补齐 image/moderation 配置，因此最终本地回归进程可同时测试图片生成和 OpenAI Moderation。
+说明：本地 `config.php` 的 `ai` 段已按线上模型配置同步；路径、Turnstile、SMTP、admin 等本地环境项继续保留本地值。
 
 ## 3. 诊断结果
 
@@ -168,4 +168,3 @@ node -c scripts/capture-page.js
 3. SMTP 已真实发出测试邮件，注意不要频繁重复触发同一邮箱的验证码限频。
 4. iOS Safari 真机键盘问题仍需要设备侧复测；本轮 Playwright 只覆盖 Chromium 移动视口。
 5. 本地 `recent.html` 会因为发布回归被刷新，属于本地测试副作用。
-

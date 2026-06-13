@@ -30,14 +30,17 @@ if ($configuredToken !== '') {
     setcookie('xlog_admin', admin_cookie_ticket($configuredToken), [
         'expires' => time() + 86400,
         'path' => '/',
-        'secure' => (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on'),
+        'secure' => admin_request_is_https(),
         'httponly' => true,
         'samesite' => 'Lax',
     ]);
 } elseif (!$isLocal) {
+    error_log('SECURITY WARNING: xlog admin.token is not configured; refusing non-local admin.php access. Configure /etc/xlog/config.php admin.token before production use.');
     http_response_code(403);
     echo 'Admin token is not configured.';
     exit;
+} else {
+    error_log('SECURITY WARNING: xlog admin.token is not configured; admin.php is using localhost-only fallback.');
 }
 
 $limit = (int)($_GET['limit'] ?? 50);
@@ -97,6 +100,13 @@ function admin_login_form($failed = false, $lockedSeconds = 0) {
 
 function admin_cookie_ticket($token) {
     return hash_hmac('sha256', 'xlog-admin-v1', (string)$token . '|' . XLOG_ROOT);
+}
+
+function admin_request_is_https() {
+    if (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on') return true;
+    if (strtolower((string)($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '')) === 'https') return true;
+    if (strtolower((string)($_SERVER['HTTP_X_FORWARDED_SSL'] ?? '')) === 'on') return true;
+    return false;
 }
 
 function admin_login_ip_hash() {

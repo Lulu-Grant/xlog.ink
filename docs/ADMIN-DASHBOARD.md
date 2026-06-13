@@ -7,9 +7,10 @@
 ## 入口
 
 - 页面：`/admin.php`
-- 生产鉴权：`/etc/xlog/config.php` 配置 `admin.token`
+- 生产鉴权：`/etc/xlog/config.php` 必须配置 `admin.token`
 - 本地开发：未配置 token 时，仅允许 `127.0.0.1` / `::1` 访问
 - 防爆破：同一 IP 默认 8 次失败后锁定 15 分钟；成功登录后清理该 IP 的失败记录
+- 生产环境不要依赖 localhost fallback；若未配置 `admin.token`，`admin.php` 会写入安全告警日志，非本机访问直接 403
 
 示例：
 
@@ -21,6 +22,8 @@
 ],
 'analytics' => [
     'salt' => '<RANDOM_ANALYTICS_HASH_SALT>',
+    'visit_ip_minute_limit' => 120,
+    'visit_retention_days' => 90,
 ],
 ```
 
@@ -44,7 +47,9 @@
 - `user_agent` / `referer` / `path`：基础访问上下文
 - `date` / `created_at`：统计日期和事件时间
 
-同一页面、同一访客 60 秒内重复访问会被去重，避免刷新或脚本短时间刷爆统计表。
+同一页面、同一 IP 60 秒内重复访问会被去重，即使攻击者更换 User-Agent 也不会绕过去重。接口还会限制同一 IP 哈希每分钟最多写入 120 条访问事件；超出后仍返回 1x1 GIF，但不写库。
+
+访问事件默认保留 90 天，由 `scripts/cleanup-tmp-assets.php` 清理。需要调整时改 `/etc/xlog/config.php` 的 `analytics.visit_retention_days`。
 
 ## 后台展示
 

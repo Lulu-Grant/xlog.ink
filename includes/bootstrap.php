@@ -23,15 +23,15 @@ function xlog_default_config() {
         'ai' => [
             'base_url' => getenv('XLOG_AI_BASE_URL') ?: 'https://api.3s3.org',
             'chat' => [
-                'base_url' => getenv('XLOG_CHAT_BASE_URL') ?: 'https://api.tu-zi.com',
-                'model' => getenv('XLOG_CHAT_MODEL') ?: 'gpt-5.4-mini',
+                'base_url' => getenv('XLOG_CHAT_BASE_URL') ?: 'https://api.3s3.org',
+                'model' => getenv('XLOG_CHAT_MODEL') ?: 'google/gemma-4-E4B-it',
                 'format' => getenv('XLOG_CHAT_FORMAT') ?: 'openai',
                 'key' => getenv('XLOG_CHAT_API_KEY') ?: '',
                 'max_tokens' => 1024,
                 'fallbacks' => [
                     [
                         'base_url' => getenv('XLOG_CHAT_FALLBACK_BASE_URL') ?: 'https://api.3s3.org',
-                        'model' => getenv('XLOG_CHAT_FALLBACK_MODEL') ?: 'google/gemma-4-26B-A4B-it',
+                        'model' => getenv('XLOG_CHAT_FALLBACK_MODEL') ?: 'gpt-5.4-mini',
                         'format' => getenv('XLOG_CHAT_FALLBACK_FORMAT') ?: 'openai',
                         'key' => getenv('XLOG_CHAT_FALLBACK_API_KEY') ?: '',
                         'max_tokens' => 1024,
@@ -39,13 +39,29 @@ function xlog_default_config() {
                 ],
             ],
             'gen' => [
-                'model' => getenv('XLOG_GEN_MODEL') ?: 'claude-sonnet-4-6',
-                'format' => getenv('XLOG_GEN_FORMAT') ?: 'anthropic',
+                'base_url' => getenv('XLOG_GEN_BASE_URL') ?: 'https://api.3s3.org',
+                'model' => getenv('XLOG_GEN_MODEL') ?: 'Qwen/Qwen3.6-35B-A3B',
+                'format' => getenv('XLOG_GEN_FORMAT') ?: 'openai',
                 'key' => getenv('XLOG_GEN_API_KEY') ?: '',
-                'max_tokens' => 49152,
+                'max_tokens' => 16384,
+                'stream' => true,
+                'timeout' => 180,
+                'low_speed_time' => 35,
+                'fallbacks' => [
+                    [
+                        'base_url' => getenv('XLOG_GEN_FALLBACK_BASE_URL') ?: 'https://api.3s3.org',
+                        'model' => getenv('XLOG_GEN_FALLBACK_MODEL') ?: 'gpt-5.4',
+                        'format' => getenv('XLOG_GEN_FALLBACK_FORMAT') ?: 'openai',
+                        'key' => getenv('XLOG_GEN_FALLBACK_API_KEY') ?: '',
+                        'max_tokens' => 16384,
+                        'stream' => true,
+                        'timeout' => 240,
+                        'low_speed_time' => 45,
+                    ],
+                ],
             ],
             'image' => [
-                'base_url' => getenv('XLOG_IMAGE_BASE_URL') ?: 'https://api.3s3.org',
+                'base_url' => getenv('XLOG_IMAGE_BASE_URL') ?: 'https://api.tu-zi.com',
                 'model' => getenv('XLOG_IMAGE_MODEL') ?: 'gpt-image-2',
                 'format' => getenv('XLOG_IMAGE_FORMAT') ?: 'openai_image',
                 'key' => getenv('XLOG_IMAGE_API_KEY') ?: '',
@@ -53,6 +69,18 @@ function xlog_default_config() {
                 'quality' => getenv('XLOG_IMAGE_QUALITY') ?: 'low',
                 'output_format' => getenv('XLOG_IMAGE_OUTPUT_FORMAT') ?: 'webp',
                 'max_tokens' => 0,
+                'fallbacks' => [
+                    [
+                        'base_url' => getenv('XLOG_IMAGE_FALLBACK_BASE_URL') ?: 'https://api.3s3.org',
+                        'model' => getenv('XLOG_IMAGE_FALLBACK_MODEL') ?: 'gpt-image-2',
+                        'format' => getenv('XLOG_IMAGE_FALLBACK_FORMAT') ?: 'openai_image',
+                        'key' => getenv('XLOG_IMAGE_FALLBACK_API_KEY') ?: '',
+                        'size' => getenv('XLOG_IMAGE_FALLBACK_SIZE') ?: '1024x1024',
+                        'quality' => getenv('XLOG_IMAGE_FALLBACK_QUALITY') ?: 'low',
+                        'output_format' => getenv('XLOG_IMAGE_FALLBACK_OUTPUT_FORMAT') ?: 'webp',
+                        'max_tokens' => 0,
+                    ],
+                ],
             ],
             'moderation' => [
                 'base_url' => getenv('XLOG_MODERATION_BASE_URL') ?: 'https://api.openai.com',
@@ -86,6 +114,8 @@ function xlog_default_config() {
         ],
         'analytics' => [
             'salt' => getenv('XLOG_ANALYTICS_SALT') ?: '',
+            'visit_ip_minute_limit' => (int)(getenv('XLOG_VISIT_IP_MINUTE_LIMIT') ?: 120),
+            'visit_retention_days' => (int)(getenv('XLOG_VISIT_RETENTION_DAYS') ?: 90),
         ],
     ];
 }

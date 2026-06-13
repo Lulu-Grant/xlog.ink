@@ -44,8 +44,8 @@
    生成前过 Turnstile + 额度检查
    │
    ▼
-⑤ 生成（claude-sonnet-4-6 驱动）
-   后端将整段对话历史 + 图片清单交给 sonnet 单次调用
+⑤ 生成（Qwen/Qwen3.6-35B-A3B 驱动，gpt-5.4 备用）
+   后端将整段对话历史 + 图片清单交给生成模型单次调用
    流式生成完整自由 HTML → 校验 → 落盘 /site/{slug}.html
    │
    ▼
@@ -104,8 +104,8 @@
 | 前端 | 原生 JS 聊天 SPA（无框架） | 与现有项目风格一致，体积小 |
 | 后端 | PHP 8.x | 现有服务器 / Nginx / 部署链路全部就绪 |
 | 数据 | SQLite | 单机够用，零运维；从 pages.jsonl 迁移 |
-| 对话模型 | `google/gemma-4-26B-A4B-it` | 便宜，承担引导与收集 |
-| 生成模型 | `claude-sonnet-4-6` | 单次大输出，生成自由 HTML |
+| 对话模型 | `google/gemma-4-E4B-it`，备用 `gpt-5.4-mini` | 便宜，承担引导与收集；备用保障可用性 |
+| 生成模型 | `Qwen/Qwen3.6-35B-A3B`，备用 `gpt-5.4` | 单次大输出，生成自由 HTML |
 | 模型网关 | `https://api.3s3.org` | 两个模型各用独立 API key |
 | 图片 | PHP GD（有 Imagick 则优先） | webp 转换 |
 | 邮件 | PHPMailer + 阿里云 DirectMail SMTPS | 验证码 / 修改链接 / 未来通知 |
@@ -118,9 +118,9 @@
    │ SSE 流式
    ▼
 ┌─ PHP 后端 ──────────────────────────────────────────┐
-│ api/chat.php      会话代理（gemma，流式转发）          │
+│ api/chat.php      会话代理（gemma / gpt-5.4-mini，流式转发）│
 │ api/upload.php    图片上传 → webp                    │
-│ api/publish.php   生成流水线（sonnet）→ 落盘 → 分配 slug│
+│ api/publish.php   生成流水线（Qwen / gpt-5.4）→ 落盘 → 分配 slug│
 │ api/auth/*.php    验证码登录                          │
 │ edit.php          token 鉴权修改入口                  │
 │ includes/ai.php   多模型适配层（anthropic/openai 双格式）│
@@ -132,9 +132,9 @@
    │                          │
    ▼                          ▼
 /site/{slug}.html      api.3s3.org
-/site-assets/{slug}/     ├ /v1/messages (claude-sonnet-4-6)
-   │                     └ /v1/chat/completions (gemma)※
-   ▼                       ※格式以 M1 实测为准
+/site-assets/{slug}/     ├ /v1/chat/completions (Qwen / gpt-5.4)
+   │                     └ /v1/chat/completions (gemma / gpt-5.4-mini)
+   ▼
 Nginx 通配符 *.xlog.ink → slug 映射（沿用现有机制）
 ```
 
@@ -147,16 +147,32 @@ Nginx 通配符 *.xlog.ink → slug 映射（沿用现有机制）
 'ai' => [
     'base_url' => 'https://api.3s3.org',
     'chat' => [
-        'model'  => 'google/gemma-4-26B-A4B-it',
-        'format' => 'openai',        // M1 实测后确定：openai | anthropic
+        'model'  => 'google/gemma-4-E4B-it',
+        'format' => 'openai',
         'key'    => '<CHAT_API_KEY>',
         'max_tokens' => 1024,        // 每轮上限，省 token
+        'fallbacks' => [[
+            'base_url' => 'https://api.3s3.org',
+            'model' => 'gpt-5.4-mini',
+            'format' => 'openai',
+            'key' => '<CHAT_FALLBACK_API_KEY>',
+            'max_tokens' => 1024,
+        ]],
     ],
     'gen' => [
-        'model'  => 'claude-sonnet-4-6',
-        'format' => 'anthropic',     // POST /v1/messages
+        'model'  => 'Qwen/Qwen3.6-35B-A3B',
+        'format' => 'openai',
         'key'    => '<GEN_API_KEY>',
-        'max_tokens' => 49152,       // 必须流式接收
+        'max_tokens' => 16384,       // 必须流式接收
+        'stream' => true,
+        'fallbacks' => [[
+            'base_url' => 'https://api.3s3.org',
+            'model' => 'gpt-5.4',
+            'format' => 'openai',
+            'key' => '<GEN_FALLBACK_API_KEY>',
+            'max_tokens' => 16384,
+            'stream' => true,
+        ]],
     ],
 ],
 ```
@@ -606,13 +622,13 @@ function consume_quota(string $kind /* generate|chat_turn */): array
 | 决策 | 结论 |
 |---|---|
 | 后端技术栈 | 继续 PHP，复用现有部署 |
-| 对话模型 | google/gemma-4-26B-A4B-it（省 token） |
-| 生成模型 | claude-sonnet-4-6，`/v1/messages`，流式 |
+| 对话模型 | google/gemma-4-E4B-it，备用 gpt-5.4-mini（省 token + 可用性兜底） |
+| 生成模型 | Qwen/Qwen3.6-35B-A3B，备用 gpt-5.4，`/v1/chat/completions`，流式 |
 | 对话阶段工具调用 | 不用；会话模型输出内联动作标记 `[[ACTION:TYPE k=v]]` + 手动按钮双路径 |
 | 独立前置路由模型 | 不引入；避免每轮延迟叠加、成本倒挂和判断权错位 |
 | UI 唤起机制 | 语义路由由会话模型打 `UPLOAD/READY/EMAIL` 标记；确定性路由由前端事件直接响应 |
 | 标记剥离责任 | 后端流尾缓冲并剥离动作标记，前端只接收干净正文与 `action` SSE |
-| 生成前是否让弱模型总结简报 | 不总结，完整对话直接交给 sonnet（避免丢信息） |
+| 生成前是否让弱模型总结简报 | 不总结，完整对话直接交给生成模型（避免丢信息） |
 | 登录方式 | 邮箱验证码（passwordless） |
 | 游客/用户额度 | 10 / 50 页每天；邮箱用户=游客待遇+修改权 |
 | 积分与充值 | 本期只建表与桩，不开收费 |

@@ -135,31 +135,10 @@ function image_write_generated_bytes($bytes, $mime, $out) {
 }
 
 function assess_generated_image_adult($prompt, $path) {
-    $result = adult_keyword_score($prompt);
-    $score = (float)$result['score'];
-    $reason = $score >= 0.55 ? 'text:' . $result['reason'] : 'generated_image';
-    if (ai_has_key('moderation')) {
-        try {
-            $visual = ai_moderate_image($path, 'image/webp', $prompt);
-            if (is_array($visual)) {
-                $visualScore = (float)($visual['score'] ?? 0);
-                if ($visualScore >= $score) {
-                    $score = $visualScore;
-                    $reason = 'visual:' . ($visual['reason'] ?? 'moderation');
-                } elseif ($score >= 0.55) {
-                    $reason .= '; visual:' . ($visual['reason'] ?? 'moderation');
-                }
-            }
-        } catch (Throwable $e) {
-            error_log('generated image moderation failed: ' . $e->getMessage());
-            $reason = $score >= 0.55
-                ? 'text:' . $result['reason'] . '; visual_error_default_non_adult'
-                : 'visual_error_default_non_adult:' . mb_substr($e->getMessage(), 0, 120, 'UTF-8');
-        }
-    }
+    $result = assess_adult_image_with_ai($path, 'image/webp', $prompt);
     return [
-        'score' => max(0.0, min(1.0, $score)),
-        'reason' => $reason,
+        'score' => (float)$result['score'],
+        'reason' => $result['reason'],
     ];
 }
 

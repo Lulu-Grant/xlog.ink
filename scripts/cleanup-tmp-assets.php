@@ -36,6 +36,15 @@ echo "Removed stale unfinished sessions: {$oldSessions}\n";
 $oldMailEvents = db_exec('DELETE FROM mail_events WHERE created_at < ?', [$sessionCutoff])->rowCount();
 echo "Removed old mail events: {$oldMailEvents}\n";
 
+$visitRetentionDays = max(1, (int)xlog_config('analytics.visit_retention_days', 90));
+$visitCutoff = gmdate('c', time() - $visitRetentionDays * 86400);
+$oldVisits = db_exec('DELETE FROM page_visits WHERE created_at < ?', [$visitCutoff])->rowCount();
+echo "Removed old page visits older than {$visitRetentionDays} days: {$oldVisits}\n";
+
+$adminAttemptCutoff = gmdate('c', time() - 30 * 86400);
+$oldAdminAttempts = db_exec('DELETE FROM admin_login_attempts WHERE created_at < ?', [$adminAttemptCutoff])->rowCount();
+echo "Removed old admin login attempts: {$oldAdminAttempts}\n";
+
 $orphanDoneSessions = db_exec(
     'DELETE FROM sessions
      WHERE state = ?

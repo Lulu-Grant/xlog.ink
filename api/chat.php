@@ -24,6 +24,13 @@ if (!session_access_allowed($row)) api_error('forbidden_session', t('api', 'forb
 db_exec('UPDATE sessions SET locale = ?, updated_at = ? WHERE id = ?', [$locale, now_iso(), $sessionId]);
 $row['locale'] = $locale;
 
+if (($row['state'] ?? '') === 'generating') {
+    sse_start();
+    sse_event('notice', ['type' => 'generating', 'message' => t('api', 'sessionGenerating', $locale)]);
+    sse_event('done', ['usage' => []]);
+    exit;
+}
+
 $q = consume_quota('chat_turn');
 if (!$q['ok']) {
     sse_start();

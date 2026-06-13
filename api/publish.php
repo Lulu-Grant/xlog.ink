@@ -113,11 +113,7 @@ try {
     $pageSlug = $slugResult['slug'];
     $html = move_session_assets_to_slug($sessionId, $pageSlug, $html);
     $adult = assess_session_adult($sessionId, $messages);
-    $hasManualAdult = array_key_exists('is_adult', $data);
-    $manualAdult = !empty($data['is_adult']);
-    $isAdult = $hasManualAdult
-        ? ($manualAdult || !empty($adult['image_adult']))
-        : !empty($adult['is_adult']);
+    $isAdult = !empty($adult['is_adult']);
     $adultFlagCleared = $editPage && !empty($editPage['is_adult']) && !$isAdult;
     $ogImagePath = first_session_image_path($sessionId);
     $ogImageUrl = $ogImagePath ? image_public_url($ogImagePath) : '';
@@ -141,22 +137,7 @@ try {
         throw new RuntimeException('Write failed');
     }
 
-    $screenshotPath = capture_page_image($pageSlug);
-    if ($screenshotPath) {
-        $screenshotUrl = image_public_url($screenshotPath);
-        if ($ogImageUrl === '') {
-            $ogImagePath = $screenshotPath;
-            $ogImageUrl = $screenshotUrl;
-            $html = ensure_page_meta($html, [
-                'title' => $title,
-                'description' => $description,
-                'og_title' => $title,
-                'og_description' => $description,
-                'og_image' => $ogImageUrl,
-            ]);
-            file_put_contents($path, $html, LOCK_EX);
-        }
-    }
+    $screenshotPath = '';
     $type = infer_page_type($generationMessages);
     $lang = normalize_locale(extract_html_lang($html)) ?: $locale;
     $now = now_iso();
@@ -186,7 +167,7 @@ try {
     }
 
     $url = 'https://' . $pageSlug . '.xlog.ink/';
-    append_session_message($sessionId, 'system', '[系统事件] 页面已发布：' . $url . '。标题《' . $title . '》。如果用户继续要求修改，默认是修改这个页面；如果用户明确说“重新做一个/再生成一个/新页面”，则进入下一次发布流程。');
+    append_session_message($sessionId, 'system', '[系统事件] 页面已发布：' . $url . '。标题《' . $title . '》。普通创建会话中，后续再次生成会创建新的页面地址，不覆盖这个页面；如果用户想修改这个已发布页面，请引导其使用邮箱修改链接或登录后的“我的页面”修改入口。');
     sse_event('stage', ['stage' => 'done']);
     sse_event('result', [
         'url' => $url,
@@ -198,6 +179,36 @@ try {
         'image_url' => $screenshotPath ? image_public_url($screenshotPath) : '',
         'og_image_url' => $ogImageUrl,
     ]);
+
+    try {
+        $screenshotPath = capture_page_image($pageSlug);
+        if ($screenshotPath) {
+            $screenshotUrl = image_public_url($screenshotPath);
+            if ($ogImageUrl === '') {
+                $ogImagePath = $screenshotPath;
+                $ogImageUrl = $screenshotUrl;
+                $html = ensure_page_meta($html, [
+                    'title' => $title,
+                    'description' => $description,
+                    'og_title' => $title,
+                    'og_description' => $description,
+                    'og_image' => $ogImageUrl,
+                ]);
+                file_put_contents($path, $html, LOCK_EX);
+            }
+            db_exec(
+                'UPDATE pages SET og_image_path = ?, screenshot_path = ?, updated_at = ? WHERE slug = ?',
+                [$ogImagePath, $screenshotPath, now_iso(), $pageSlug]
+            );
+            sse_event('preview_image', [
+                'slug' => $pageSlug,
+                'image_url' => $screenshotUrl,
+                'og_image_url' => $ogImageUrl,
+            ]);
+        }
+    } catch (Throwable $e) {
+        error_log('post-publish screenshot failed: ' . $e->getMessage());
+    }
     sse_event('done', ['usage' => $usage]);
 } catch (Throwable $e) {
     refund_generate_charge($quotaCharge);

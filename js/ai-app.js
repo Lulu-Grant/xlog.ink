@@ -11,6 +11,7 @@
     previewCard: null,
     previewTimer: null,
     awaitingEmail: false,
+    editMode: '',
   };
   var SESSION_STORAGE_KEY = 'xlog:lastSessionId';
   var locale = normalizeLocale(window.XLOG_LOCALE || document.body.dataset.locale || '');
@@ -151,6 +152,11 @@
     });
   }
 
+  function disablePublishFlowCards() {
+    Array.prototype.forEach.call(document.querySelectorAll('.generate-card, .publish-confirm-card'), disableCard);
+    state.publishCard = null;
+  }
+
   function renderPresetCard() {
     if (document.querySelector('.preset-card')) return;
     addActionCard('preset-card',
@@ -174,6 +180,7 @@
   function showGenerateCard(reason) {
     if (!state.sessionId || state.readyShown) return;
     state.readyShown = true;
+    disablePublishFlowCards();
     addActionCard('generate-card',
       '<div class="action-title">' + escapeHtml(t('generateReadyTitle')) + '</div>' +
       '<p>' + escapeHtml(reason || t('generateReadyBody')) + '</p>' +
@@ -188,17 +195,16 @@
       scrollDown(true);
       return;
     }
+    disablePublishFlowCards();
     var turnstile = '';
     if (document.body.dataset.turnstileEnabled === '1') {
       turnstile = '<div class="turnstile-box"><div class="inline-turnstile"></div></div>';
     }
+    var confirmCopy = t('publishConfirmBody') + ' ' + t('publishEmailNotice');
+    if (state.currentPage && !state.editMode) confirmCopy += ' ' + t('publishCreatesNewPage');
     state.publishCard = addActionCard('publish-confirm-card',
       '<div class="action-title">' + escapeHtml(t('publishConfirmTitle')) + '</div>' +
-      '<p>' + escapeHtml(t('publishConfirmBody')) + '</p>' +
-      '<label class="adult-toggle">' +
-      '<input class="inline-adult-checkbox" type="checkbox"' + (state.currentPageIsAdult ? ' checked' : '') + '>' +
-      '<span>' + escapeHtml(t('adultToggle')) + '</span>' +
-      '</label>' +
+      '<p>' + escapeHtml(confirmCopy) + '</p>' +
       '<p class="action-muted">' + escapeHtml(t('adultAutoNotice')) + '</p>' +
       turnstile +
       '<div class="inline-actions">' +
@@ -300,7 +306,7 @@
     scrollDown(true);
   }
 
-  function finalizeLivePreview(url, pageImageUrl) {
+  function finalizeLivePreview(url, pageImageUrl, noteText) {
     if (!url) return;
     var card = ensureLivePreviewCard();
     stopLivePreview(t('pageOnline'));
@@ -331,15 +337,15 @@
         image.removeAttribute('src');
       }
       if (frame) {
-        frame.src = url;
-        frame.hidden = false;
-        if (fallback) fallback.hidden = true;
-      } else if (fallback) {
+        frame.hidden = true;
+        frame.removeAttribute('src');
+      }
+      if (fallback) {
         fallback.hidden = false;
       }
     }
     var note = card.querySelector('.live-preview-note');
-    if (note) note.textContent = t('finalPreviewNote');
+    if (note) note.textContent = noteText || t('finalPreviewNote');
     var panel = card.querySelector('.delivery-panel');
     if (panel) panel.hidden = false;
     var urlBox = card.querySelector('.url-box');
@@ -354,6 +360,29 @@
       if (downloadBtn) downloadBtn.hidden = true;
     }
     scrollDown(true);
+  }
+
+  function updateFinalPreviewImage(pageImageUrl) {
+    if (!pageImageUrl || !state.previewCard || !document.body.contains(state.previewCard)) return;
+    var card = state.previewCard;
+    card.dataset.pageImageUrl = pageImageUrl;
+    var shot = card.querySelector('.final-preview-shot');
+    if (shot) shot.hidden = false;
+    var image = card.querySelector('.final-preview-image');
+    if (image) {
+      image.src = pageImageUrl;
+      image.hidden = false;
+    }
+    var frame = card.querySelector('.live-preview-frame');
+    if (frame) {
+      frame.hidden = true;
+      frame.removeAttribute('src');
+    }
+    var fallback = card.querySelector('.final-preview-fallback');
+    if (fallback) fallback.hidden = true;
+    var imageBtn = card.querySelector('button[data-download-page-image]');
+    if (imageBtn) imageBtn.hidden = false;
+    scrollDown(false);
   }
 
   function updateLivePreviewStatus(text) {
@@ -584,6 +613,7 @@
     state.currentPage = data.page || null;
     state.currentPageIsAdult = !!(data.page && data.page.is_adult);
     state.lastUrl = data.page && data.page.url ? data.page.url : '';
+    state.editMode = data.edit_mode || '';
     state.awaitingEmail = false;
     messages.innerHTML = '';
     state.readyShown = false;
@@ -611,6 +641,8 @@
       }
     } else if (data.edit_mode && fresh) {
       addMessage('assistant', t('editModeEntered'));
+    } else if (data.state === 'ready') {
+      showGenerateCard(t('readyNeedsConfirm'));
     }
   }
 
@@ -693,6 +725,7 @@
         }
         return;
       }
+      completeEmailCard(document.querySelector('.email-card[data-active="1"]'));
     }
     setBusy(true);
     addMessage('user', text);
@@ -762,8 +795,7 @@
       body: JSON.stringify({
         session_id: state.sessionId,
         turnstile_token: turnstileToken,
-        locale: locale,
-        is_adult: !!(options && options.isAdult)
+        locale: locale
       })
     }).then(function (r) {
       var generatedChars = 0;
@@ -798,16 +830,20 @@
         },
         result: function (d) {
           publishTerminal = true;
+          var createdAfterExistingPage = !!(state.currentPage && !state.editMode);
           state.lastUrl = d.url;
           state.currentPage = { url: d.url, slug: d.slug || '', is_adult: !!d.is_adult };
           state.currentPageIsAdult = !!d.is_adult;
           state.readyShown = false;
           state.publishCard = null;
-          finalizeLivePreview(d.url, d.image_url || '');
+          finalizeLivePreview(d.url, d.image_url || '', createdAfterExistingPage ? t('publishedNewPageNotice') : '');
           addMessage('assistant', t('publishedAskEmail'));
           showEmailCard();
           api('/api/auth/me.php', {}).then(function (me) { setUser(me.user); setQuota(me.quota); }).catch(function () {});
           if (window.turnstile) window.turnstile.reset();
+        },
+        preview_image: function (d) {
+          updateFinalPreviewImage(d.image_url || '');
         }
       });
     }).then(function () {
@@ -1044,10 +1080,8 @@
     if (confirmPublish) {
       var publishCard = confirmPublish.closest('.action-card');
       var widget = publishCard && publishCard.dataset.turnstileWidget !== undefined ? publishCard.dataset.turnstileWidget : undefined;
-      var adultCheckbox = publishCard ? publishCard.querySelector('.inline-adult-checkbox') : null;
       publish({
         turnstileWidget: widget,
-        isAdult: !!(adultCheckbox && adultCheckbox.checked),
         card: publishCard
       });
       return;
