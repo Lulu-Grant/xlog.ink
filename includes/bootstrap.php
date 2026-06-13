@@ -69,6 +69,14 @@ function xlog_default_config() {
             'credit_mode' => false,
             'generate_credit_cost' => 1,
         ],
+        'admin' => [
+            'token' => getenv('XLOG_ADMIN_TOKEN') ?: '',
+            'max_attempts' => (int)(getenv('XLOG_ADMIN_MAX_ATTEMPTS') ?: 8),
+            'lock_seconds' => (int)(getenv('XLOG_ADMIN_LOCK_SECONDS') ?: 900),
+        ],
+        'analytics' => [
+            'salt' => getenv('XLOG_ANALYTICS_SALT') ?: '',
+        ],
     ];
 }
 

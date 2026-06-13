@@ -132,6 +132,27 @@ CREATE TABLE IF NOT EXISTS mail_events (
     created_at TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_mail_events_lookup ON mail_events(kind, event_key, created_at);
+CREATE TABLE IF NOT EXISTS page_visits (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    slug TEXT NOT NULL,
+    visitor_hash TEXT NOT NULL,
+    ip_hash TEXT NOT NULL,
+    user_agent TEXT DEFAULT '',
+    referer TEXT DEFAULT '',
+    path TEXT DEFAULT '',
+    date TEXT NOT NULL,
+    created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_page_visits_slug_created ON page_visits(slug, created_at);
+CREATE INDEX IF NOT EXISTS idx_page_visits_slug_date ON page_visits(slug, date);
+CREATE INDEX IF NOT EXISTS idx_page_visits_date ON page_visits(date);
+CREATE TABLE IF NOT EXISTS admin_login_attempts (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    ip_hash TEXT NOT NULL,
+    success INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_admin_login_attempts_lookup ON admin_login_attempts(ip_hash, success, created_at);
 ");
     db_ensure_column($pdo, 'sessions', 'edit_mode', "TEXT NOT NULL DEFAULT ''");
     db_ensure_column($pdo, 'sessions', 'client_id', "TEXT DEFAULT ''");

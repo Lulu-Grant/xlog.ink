@@ -80,4 +80,12 @@ return [
         'credit_mode' => false,
         'generate_credit_cost' => 1,
     ],
+    'admin' => [
+        'token' => '<ADMIN_DASHBOARD_TOKEN>',
+        'max_attempts' => 8,
+        'lock_seconds' => 900,
+    ],
+    'analytics' => [
+        'salt' => '<RANDOM_ANALYTICS_HASH_SALT>',
+    ],
 ];

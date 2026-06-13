@@ -132,7 +132,7 @@ try {
         $html = inject_adult_gate($html, $pageSlug, normalize_locale(extract_html_lang($html)) ?: $locale);
     }
     $html = inject_generated_csp($html);
-    $html = inject_generated_footer($html);
+    $html = inject_generated_footer($html, $pageSlug);
 
     sse_event('stage', ['stage' => 'writing']);
     $path = xlog_config('site_dir') . '/' . $pageSlug . '.html';
@@ -260,9 +260,15 @@ function validate_generated_html($html) {
     if (preg_match('/<form\b/i', $html)) throw new RuntimeException('forms are not allowed');
 }
 
-function inject_generated_footer($html) {
+function inject_generated_footer($html, $slug = '') {
+    $baseUrl = rtrim((string)xlog_config('base_url', 'https://xlog.ink'), '/');
+    $pixel = '';
+    if (preg_match('/^[a-z0-9]{3,20}$/', (string)$slug)) {
+        $pixelUrl = $baseUrl . '/api/visit.php?slug=' . rawurlencode($slug);
+        $pixel = '<img src="' . h($pixelUrl) . '" alt="" width="1" height="1" loading="eager" referrerpolicy="origin-when-cross-origin" style="position:absolute;width:1px;height:1px;opacity:0;pointer-events:none;overflow:hidden">';
+    }
     $badge = '<div style="position:fixed;right:12px;bottom:12px;z-index:9999;font:12px/1.2 ui-monospace,monospace;background:rgba(0,0,0,.72);color:#fff;padding:8px 10px;border-radius:999px"><a href="https://xlog.ink" style="color:inherit;text-decoration:none">Made with xlog.ink</a></div>';
-    return preg_replace('/<\/body>/i', $badge . "\n</body>", $html, 1);
+    return preg_replace('/<\/body>/i', $pixel . "\n" . $badge . "\n</body>", $html, 1);
 }
 
 function inject_generated_csp($html) {
