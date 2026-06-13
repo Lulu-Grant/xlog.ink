@@ -1,9 +1,14 @@
 #!/usr/bin/env node
 const fs = require('fs');
 
+if (!process.env.PLAYWRIGHT_BROWSERS_PATH) {
+  process.env.PLAYWRIGHT_BROWSERS_PATH = '/opt/xlog-playwright-browsers';
+}
+
 function loadPlaywright() {
   const candidates = [
     'playwright',
+    '/opt/xlog-playwright/node_modules/playwright',
     '/Users/apple/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/playwright'
   ];
   for (const name of candidates) {
