@@ -11,7 +11,6 @@
     previewCard: null,
     previewTimer: null,
     awaitingEmail: false,
-    pendingAutoPublish: null,
   };
   var SESSION_STORAGE_KEY = 'xlog:lastSessionId';
   var locale = normalizeLocale(window.XLOG_LOCALE || document.body.dataset.locale || '');
@@ -184,7 +183,7 @@
   }
 
   function showPublishConfirmCard() {
-    if (!state.sessionId || state.busy) return;
+    if (!state.sessionId) return;
     if (state.publishCard && document.body.contains(state.publishCard)) {
       scrollDown(true);
       return;
@@ -196,6 +195,10 @@
     state.publishCard = addActionCard('publish-confirm-card',
       '<div class="action-title">' + escapeHtml(t('publishConfirmTitle')) + '</div>' +
       '<p>' + escapeHtml(t('publishConfirmBody')) + '</p>' +
+      '<label class="adult-toggle">' +
+      '<input class="inline-adult-checkbox" type="checkbox"' + (state.currentPageIsAdult ? ' checked' : '') + '>' +
+      '<span>' + escapeHtml(t('adultToggle')) + '</span>' +
+      '</label>' +
       '<p class="action-muted">' + escapeHtml(t('adultAutoNotice')) + '</p>' +
       turnstile +
       '<div class="inline-actions">' +
@@ -231,7 +234,7 @@
     if (!state.previewCard || !document.body.contains(state.previewCard)) {
       state.previewCard = addActionCard('live-preview-card',
         '<div class="live-preview-head">' +
-        '<div><span class="live-dot"></span><strong>Page Forge Stream</strong></div>' +
+        '<div><span class="live-dot"></span><strong>' + escapeHtml(t('forgeStream')) + '</strong></div>' +
         '<span class="live-preview-status">' + escapeHtml(t('previewStarting')) + '</span>' +
         '</div>' +
         buildPreviewPlaceholder() +
@@ -333,22 +336,10 @@
     var params = action.params || {};
     if (action.type === 'upload') addUploadCard(params);
     else if (action.type === 'ready') showGenerateCard(params.reason || t('readyFallback'));
-    else if (action.type === 'publish') state.pendingAutoPublish = params;
+    else if (action.type === 'publish') showPublishConfirmCard();
     else if (action.type === 'email') showEmailCard();
     else if (action.type === 'domain') showDomainCard(params);
     else if (action.type === 'image_gen') showImageGenCard(params);
-  }
-
-  function runAutoPublish(params) {
-    params = params || {};
-    if (document.body.dataset.turnstileEnabled === '1') {
-      addMessage('system', t('turnstileFirst'));
-      state.readyShown = false;
-      showPublishConfirmCard();
-      return;
-    }
-    addMessage('system', params.reason ? t('publishConfirmedReason', { reason: params.reason }) : t('publishConfirmed'));
-    publish({});
   }
 
   function addUploadCard(params) {
@@ -494,11 +485,14 @@
   function renderStoredMessage(message) {
     var role = message.role || 'assistant';
     var content = message.content || '';
-    if (role === 'system' && content.indexOf('[系统事件]') === 0) return;
+    if (content.indexOf('[系统事件]') === 0) return;
     if (role === 'user' && content.indexOf('[当前页面信息]') === 0) return;
     if (role === 'user' && content.indexOf('[目前頁面資訊]') === 0) return;
     if (role === 'user' && content.indexOf('[Current page info]') === 0) return;
     if (role === 'user' && content.indexOf('[图片已上传:') === 0) return;
+    if (role === 'user' && content.indexOf('[图片已生成:') === 0) return;
+    if (role === 'user' && content.indexOf('[圖片已生成:') === 0) return;
+    if (role === 'user' && content.indexOf('[Image generated:') === 0) return;
     addMessage(role === 'user' ? 'user' : (role === 'system' ? 'system' : 'assistant'), content);
   }
 
@@ -514,7 +508,6 @@
     state.currentPageIsAdult = !!(data.page && data.page.is_adult);
     state.lastUrl = data.page && data.page.url ? data.page.url : '';
     state.awaitingEmail = false;
-    state.pendingAutoPublish = null;
     messages.innerHTML = '';
     state.readyShown = false;
     state.publishCard = null;
@@ -650,11 +643,6 @@
     }).finally(function () {
       ai.classList.remove('is-typing');
       setBusy(false);
-      if (state.pendingAutoPublish) {
-        var autoPublish = state.pendingAutoPublish;
-        state.pendingAutoPublish = null;
-        runAutoPublish(autoPublish);
-      }
     });
   }
 
@@ -697,7 +685,8 @@
       body: JSON.stringify({
         session_id: state.sessionId,
         turnstile_token: turnstileToken,
-        locale: locale
+        locale: locale,
+        is_adult: !!(options && options.isAdult)
       })
     }).then(function (r) {
       var generatedChars = 0;
@@ -887,7 +876,7 @@
       if (d.error) { addMessage('system', d.error.message); return; }
       if (card) {
         card.dataset.active = '0';
-        card.innerHTML = '<strong>' + escapeHtml(t('imageUploaded')) + '</strong><p>' + escapeHtml(caption || t('noCaption')) + '</p><img src="' + escapeAttr(d.url) + '" alt="" style="width:96px;height:96px;object-fit:cover;border-radius:12px">';
+        card.innerHTML = '<strong>' + escapeHtml(t('imageUploaded')) + '</strong><p>' + escapeHtml(caption || t('noCaption')) + '</p><img src="' + escapeAttr(d.url) + '" alt="" class="card-thumb">';
       }
       toast(t('imageUploadedToast'));
       sendMessage(t('imageUploadedChatMessage', { caption: caption || t('noCaption') }));
@@ -978,8 +967,10 @@
     if (confirmPublish) {
       var publishCard = confirmPublish.closest('.action-card');
       var widget = publishCard && publishCard.dataset.turnstileWidget !== undefined ? publishCard.dataset.turnstileWidget : undefined;
+      var adultCheckbox = publishCard ? publishCard.querySelector('.inline-adult-checkbox') : null;
       publish({
         turnstileWidget: widget,
+        isAdult: !!(adultCheckbox && adultCheckbox.checked),
         card: publishCard
       });
       return;
@@ -1022,7 +1013,7 @@
         disableCard(imageCard);
         if (imageCard) {
           imageCard.dataset.active = '0';
-          imageCard.innerHTML = '<strong>' + escapeHtml(t('imageGenTitle')) + '</strong><p>' + escapeHtml(prompt) + '</p><img src="' + escapeAttr(r.url) + '" alt="" style="width:96px;height:96px;object-fit:cover;border-radius:0">';
+          imageCard.innerHTML = '<strong>' + escapeHtml(t('imageGenTitle')) + '</strong><p>' + escapeHtml(prompt) + '</p><img src="' + escapeAttr(r.url) + '" alt="" class="card-thumb">';
         }
         addMessage('assistant', t('imageGenerated', { url: r.url }));
         sendMessage(t('imageUploadedChatMessage', { caption: prompt }));

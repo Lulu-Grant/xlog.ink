@@ -77,60 +77,22 @@ function image_create_generated_placeholder($sessionId, $prompt, $slot = 'hero')
     if ($n > 8) throw new RuntimeException('Up to 8 images per session');
     $out = $dir . '/gen-' . $n . '.webp';
     $rel = '/site-assets/tmp/' . $sessionId . '/gen-' . $n . '.webp';
-    if (ai_has_key('image')) {
-        try {
-            $generated = ai_generate_image($prompt, [
-                'size' => '1024x1024',
-                'quality' => 'low',
-                'output_format' => 'webp',
-            ]);
-            if (is_array($generated)) {
-                [$w, $h] = image_write_generated_bytes($generated['bytes'], $generated['mime'], $out);
-                $adult = assess_generated_image_adult($prompt, $out);
-                db_exec(
-                    'INSERT INTO images (session_id, path, caption, slot, source, adult_score, adult_reason, width, height, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-                    [$sessionId, $rel, $prompt, $slot, 'generated_ai', $adult['score'], $adult['reason'], $w, $h, now_iso()]
-                );
-                return [
-                    'id' => (int)db()->lastInsertId(),
-                    'url' => image_public_url($rel),
-                    'path' => $rel,
-                    'slot' => $slot,
-                    'width' => $w,
-                    'height' => $h,
-                    'adult_score' => $adult['score'],
-                    'provider' => $generated['model'] ?? 'gpt-image',
-                ];
-            }
-        } catch (Throwable $e) {
-            error_log('AI image generation failed, falling back to placeholder: ' . $e->getMessage());
-        }
+    if (!ai_has_key('image')) {
+        throw new RuntimeException('AI image generation is not configured');
     }
-    $w = 1280;
-    $h = 720;
-    $im = imagecreatetruecolor($w, $h);
-    $bg = imagecolorallocate($im, 239, 237, 232);
-    $ink = imagecolorallocate($im, 31, 30, 29);
-    $acc = imagecolorallocate($im, 217, 119, 87);
-    imagefilledrectangle($im, 0, 0, $w, $h, $bg);
-    for ($i = 0; $i < 18; $i++) {
-        $x = ($i * 97) % $w;
-        $y = ($i * 53) % $h;
-        imagefilledrectangle($im, $x, $y, min($w, $x + 160), min($h, $y + 48), $i % 2 ? $acc : $ink);
+    $generated = ai_generate_image($prompt, [
+        'size' => '1024x1024',
+        'quality' => 'low',
+        'output_format' => 'webp',
+    ]);
+    if (!is_array($generated)) {
+        throw new RuntimeException('AI image generation returned no image');
     }
-    imagestring($im, 5, 48, 48, 'xlog generated visual', $ink);
-    $lines = str_split(preg_replace('/\s+/u', ' ', $prompt), 54);
-    $y = 600;
-    foreach (array_slice($lines, 0, 2) as $line) {
-        imagestring($im, 4, 48, $y, $line, $ink);
-        $y += 24;
-    }
-    imagewebp($im, $out, 82);
-    if (PHP_VERSION_ID < 80500) @imagedestroy($im);
-    $adult = adult_keyword_score($prompt);
+    [$w, $h] = image_write_generated_bytes($generated['bytes'], $generated['mime'], $out);
+    $adult = assess_generated_image_adult($prompt, $out);
     db_exec(
         'INSERT INTO images (session_id, path, caption, slot, source, adult_score, adult_reason, width, height, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-        [$sessionId, $rel, $prompt, $slot, 'generated', $adult['score'], $adult['reason'], $w, $h, now_iso()]
+        [$sessionId, $rel, $prompt, $slot, 'generated_ai', $adult['score'], $adult['reason'], $w, $h, now_iso()]
     );
     return [
         'id' => (int)db()->lastInsertId(),
@@ -140,6 +102,7 @@ function image_create_generated_placeholder($sessionId, $prompt, $slot = 'hero')
         'width' => $w,
         'height' => $h,
         'adult_score' => $adult['score'],
+        'provider' => $generated['model'] ?? 'gpt-image',
     ];
 }
 
@@ -189,6 +152,8 @@ function assess_generated_image_adult($prompt, $path) {
             }
         } catch (Throwable $e) {
             error_log('generated image moderation failed: ' . $e->getMessage());
+            $score = max($score, 0.55);
+            $reason = 'visual_error:' . mb_substr($e->getMessage(), 0, 120, 'UTF-8');
         }
     }
     return [

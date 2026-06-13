@@ -24,7 +24,8 @@ try {
     api_json($result);
 } catch (Throwable $e) {
     refund_quota('image_generate', $charge);
-    api_error('image_generate_failed', $e->getMessage(), 400);
+    error_log('image generation failed: ' . $e->getMessage());
+    api_error('image_generate_failed', t('api', 'imageGenerateFailed', $locale), 400);
 }
 
 function normalize_generated_image_slot($slot) {

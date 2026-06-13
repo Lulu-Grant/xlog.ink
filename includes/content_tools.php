@@ -6,22 +6,30 @@ require_once __DIR__ . '/ai.php';
 
 function adult_keyword_score($text) {
     $text = mb_strtolower((string)$text, 'UTF-8');
-    $strong = [
-        'porn', 'xxx', 'nsfw', 'nude', 'naked', 'sex', 'erotic', 'escort',
-        '成人', '情色', '色情', '裸露', '裸体', '性愛', '性爱', '約炮', '约炮', '援交', '18禁',
+    $text = preg_replace('/(不是|並非|并非|非|不含|沒有|没有|no|not|without)\s*(成人|情色|色情|裸露|裸体|裸體|porn|xxx|nsfw|nude|naked|sex|erotic)/iu', ' ', $text);
+    $critical = [
+        'porn', 'xxx', 'nsfw', 'nude', 'naked', 'hardcore', 'escort',
+        '情色', '裸露', '裸體', '裸体', '性愛', '性爱', '約炮', '约炮', '援交', '18禁',
     ];
-    $soft = ['性感', '私密', '情趣', '泳装', '內衣', '内衣', 'lingerie', 'bikini'];
+    $strong = ['adult content', 'erotic', '成人内容', '成人內容', '色情'];
+    $soft = ['性感', '私密', '情趣', '泳装', '泳裝', '內衣', '内衣', 'lingerie', 'bikini'];
     $score = 0.0;
     $hits = [];
+    foreach ($critical as $kw) {
+        if (mb_stripos($text, $kw, 0, 'UTF-8') !== false) {
+            $score += 0.9;
+            $hits[] = $kw;
+        }
+    }
     foreach ($strong as $kw) {
         if (mb_stripos($text, $kw, 0, 'UTF-8') !== false) {
-            $score += 0.72;
+            $score += 0.45;
             $hits[] = $kw;
         }
     }
     foreach ($soft as $kw) {
         if (mb_stripos($text, $kw, 0, 'UTF-8') !== false) {
-            $score += 0.25;
+            $score += 0.05;
             $hits[] = $kw;
         }
     }
@@ -39,18 +47,23 @@ function assess_session_adult($sessionId, array $messages) {
     $textResult = adult_keyword_score($text);
     $imageRows = db_all('SELECT adult_score, adult_reason FROM images WHERE session_id = ?', [$sessionId]);
     $imageScore = 0.0;
+    $imageAdult = false;
     $imageReasons = [];
     foreach ($imageRows as $row) {
         $score = (float)($row['adult_score'] ?? 0);
         if ($score > $imageScore) $imageScore = $score;
+        if ($score >= 0.55) $imageAdult = true;
         if ($score >= 0.55 && !empty($row['adult_reason'])) $imageReasons[] = $row['adult_reason'];
     }
     $score = max((float)$textResult['score'], $imageScore);
     $reasons = [];
-    if ($textResult['score'] >= 0.55) $reasons[] = 'text:' . $textResult['reason'];
+    $textAdult = (float)$textResult['score'] >= 0.85;
+    if ($textAdult) $reasons[] = 'text:' . $textResult['reason'];
     foreach (array_slice($imageReasons, 0, 3) as $reason) $reasons[] = 'image:' . $reason;
     return [
-        'is_adult' => $score >= 0.55,
+        'is_adult' => $textAdult || $imageAdult,
+        'text_adult' => $textAdult,
+        'image_adult' => $imageAdult,
         'score' => $score,
         'reason' => $reasons ? implode('; ', $reasons) : 'clean',
     ];
@@ -77,7 +90,8 @@ function assess_uploaded_image_adult(array $file, $caption = '', $processedPath 
             }
         } catch (Throwable $e) {
             error_log('image moderation failed: ' . $e->getMessage());
-            $reason = $score >= 0.55 ? $result['reason'] : 'visual_error:' . mb_substr($e->getMessage(), 0, 120, 'UTF-8');
+            $score = max($score, 0.55);
+            $reason = 'visual_error:' . mb_substr($e->getMessage(), 0, 120, 'UTF-8');
         }
     }
     return [
@@ -90,6 +104,52 @@ function slug_clean($value) {
     $value = strtolower((string)$value);
     $value = preg_replace('/[^a-z0-9]/', '', $value);
     return substr($value, 0, 10);
+}
+
+function slug_reserved_words() {
+    static $words = null;
+    if ($words !== null) return $words;
+    $raw = [
+        'www','web','app','m','wap','mobile','home','index','portal',
+        'login','signin','signup','register','auth','oauth','sso','passport','id','account','accounts','profile','user','users','member','members','center','uc',
+        'admin','administrator','manage','manager','dashboard','console','panel','cpanel','backend','system','ops',
+        'api','apiv1','apiv2','apiv3','open','gateway','gw','rpc','graphql','rest','service','services','sdk',
+        'mail','webmail','smtp','imap','pop','mx','relay',
+        'files','file','upload','uploads','download','downloads','attachment','attachments','share','storage',
+        'img','image','images','pic','pics','photo','photos','media','video','live','stream',
+        'cdn','static','assets','resource','resources','cache','edge','accelerate',
+        'docs','doc','developer','developers','dev','apidocs','reference','guide','manual','wiki','kb','help','support','ticket','faq','feedback','contact',
+        'status','stats','statistics','analytics','report','reports','monitor','monitoring','metrics','logs','audit',
+        'db','mysql','pgsql','mongo','redis','memcache','es','elastic','mq','queue','rabbitmq','kafka','event',
+        'cloud','object','bucket','oss','cos','s3','backup','archive',
+        'oa','crm','erp','hr','finance','office','work','meeting',
+        'test','beta','alpha','uat','staging','preview','demo','sandbox','lab',
+        'git','gitlab','gitea','repo','svn','ci','cd','build','deploy','docker','k8s','jenkins',
+        'security','safe','vpn','waf','firewall','scan','verify','trust',
+        'bbs','forum','community','club','group','social','blog','news','press',
+        'shop','store','mall','cart','order','orders','payment','pay','billing','invoice',
+        'search','find','query','engine',
+        'ai','gpt','chat','bot','agent','assistant','prompt','model','llm','inference','proxy',
+        'data','edit','vip',
+    ];
+    $words = [];
+    foreach ($raw as $word) {
+        $clean = slug_clean($word);
+        if ($clean !== '') $words[$clean] = true;
+    }
+    return $words;
+}
+
+function slug_is_reserved($slug) {
+    $slug = slug_clean($slug);
+    if ($slug === '') return false;
+    $words = slug_reserved_words();
+    return isset($words[$slug]);
+}
+
+function slug_is_available_for_page($slug) {
+    $slug = slug_clean($slug);
+    return $slug !== '' && !slug_is_reserved($slug) && !slug_exists($slug);
 }
 
 function slug_base_from_text($text, $fallback = 'page') {
@@ -106,16 +166,20 @@ function slug_base_from_text($text, $fallback = 'page') {
     ];
     foreach ($map as $base => $needles) {
         foreach ($needles as $needle) {
-            if (mb_stripos($text, $needle, 0, 'UTF-8') !== false) return $base;
+            if (mb_stripos($text, $needle, 0, 'UTF-8') !== false) {
+                return slug_is_reserved($base) ? 'page' : $base;
+            }
         }
     }
     if (preg_match_all('/[a-z][a-z0-9]{2,}/', $text, $m) && !empty($m[0])) {
         $stop = ['page', 'html', 'with', 'this', 'that', 'make', 'create'];
         foreach ($m[0] as $word) {
-            if (!in_array($word, $stop, true)) return substr($word, 0, 7);
+            $base = substr($word, 0, 7);
+            if (!in_array($word, $stop, true) && !slug_is_reserved($base)) return $base;
         }
     }
-    return slug_clean($fallback) ?: 'page';
+    $fallback = slug_clean($fallback);
+    return ($fallback !== '' && !slug_is_reserved($fallback)) ? $fallback : 'page';
 }
 
 function random_letters($length = 3) {
@@ -127,12 +191,12 @@ function random_letters($length = 3) {
 
 function generate_semantic_slug(array $messages, $title = '', $desired = '') {
     $desired = slug_clean($desired);
-    if ($desired !== '') {
+    if ($desired !== '' && !slug_is_reserved($desired)) {
         if (!slug_exists($desired)) return ['slug' => $desired, 'source' => 'custom'];
         $base = substr($desired, 0, 7);
         for ($i = 0; $i < 30; $i++) {
             $slug = substr($base, 0, 7) . random_letters(3);
-            if (!slug_exists($slug)) return ['slug' => $slug, 'source' => 'custom_suffix'];
+            if (slug_is_available_for_page($slug)) return ['slug' => $slug, 'source' => 'custom_suffix'];
         }
     }
     $text = $title;
@@ -141,9 +205,13 @@ function generate_semantic_slug(array $messages, $title = '', $desired = '') {
     if (strlen($base) < 3) $base = 'page';
     for ($i = 0; $i < 30; $i++) {
         $slug = substr($base, 0, 7) . random_letters(3);
-        if (!slug_exists($slug)) return ['slug' => $slug, 'source' => 'auto'];
+        if (slug_is_available_for_page($slug)) return ['slug' => $slug, 'source' => 'auto'];
     }
-    return ['slug' => generate_unique_slug(), 'source' => 'random_fallback'];
+    for ($i = 0; $i < 30; $i++) {
+        $slug = random_name(10);
+        if (slug_is_available_for_page($slug)) return ['slug' => $slug, 'source' => 'random_fallback'];
+    }
+    throw new RuntimeException('Could not generate safe slug');
 }
 
 function first_session_image_path($sessionId) {

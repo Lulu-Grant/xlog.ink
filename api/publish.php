@@ -112,7 +112,11 @@ try {
     $pageSlug = $slugResult['slug'];
     $html = move_session_assets_to_slug($sessionId, $pageSlug, $html);
     $adult = assess_session_adult($sessionId, $messages);
-    $isAdult = !empty($adult['is_adult']);
+    $hasManualAdult = array_key_exists('is_adult', $data);
+    $manualAdult = !empty($data['is_adult']);
+    $isAdult = $hasManualAdult
+        ? ($manualAdult || !empty($adult['image_adult']))
+        : !empty($adult['is_adult']);
     $adultFlagCleared = $editPage && !empty($editPage['is_adult']) && !$isAdult;
     $ogImagePath = first_session_image_path($sessionId);
     $ogImageUrl = $ogImagePath ? image_public_url($ogImagePath) : '';

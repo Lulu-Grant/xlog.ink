@@ -14,6 +14,9 @@
   --line: #dad4cb;
   --line-strong: #1f1e1d;
   --bw: 1.5px;
+  --btn-h: 36px;
+  --card-w: min(580px, calc(100% - 15px));
+  --surface: #f3f1ec;
   --mono: "JetBrains Mono", "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, "PingFang SC", "Microsoft YaHei", monospace;
 }
 
@@ -520,7 +523,7 @@ button:disabled { cursor: default; opacity: .45; }
 
 .action-card {
   align-self: flex-start;
-  width: min(580px, calc(100% - 15px));
+  width: var(--card-w);
   margin-left: 15px;
   display: grid;
   gap: 10px;
@@ -554,14 +557,14 @@ button:disabled { cursor: default; opacity: .45; }
 .preset-row button {
   display: inline-flex;
   align-items: center;
-  min-height: 32px;
+  min-height: var(--btn-h);
   padding: 0 10px;
   border: var(--bw) solid var(--line-strong);
   border-radius: 0;
   background: transparent;
   color: var(--ink);
   font-size: 12.5px;
-  font-weight: 500;
+  font-weight: 600;
 }
 .preset-row button::before { content: "[ "; }
 .preset-row button::after { content: " ]"; }
@@ -579,22 +582,23 @@ button:disabled { cursor: default; opacity: .45; }
 }
 .publish-btn {
   min-width: 132px;
-  min-height: 38px;
+  min-height: var(--btn-h);
   border: var(--bw) solid var(--acc);
   border-radius: 0;
   background: var(--acc);
   color: var(--panel);
-  font-weight: 700;
+  font-weight: 600;
 }
 .publish-btn::before { content: "▶ "; }
 .publish-btn:hover:not(:disabled) {
   background: var(--acc-deep);
   border-color: var(--acc-deep);
 }
-.generate-card { border-color: var(--acc); }
-.generate-card .action-title::before, .generate-card .action-title::after { color: var(--acc); }
+.generate-card, .publish-confirm-card { border-color: var(--acc); }
+.generate-card .action-title::before, .generate-card .action-title::after,
+.publish-confirm-card .action-title::before, .publish-confirm-card .action-title::after { color: var(--acc); }
 .ghost-btn {
-  min-height: 36px;
+  min-height: var(--btn-h);
   border: var(--bw) solid var(--line);
   border-radius: 0;
   background: transparent;
@@ -627,7 +631,7 @@ button:disabled { cursor: default; opacity: .45; }
 
 .live-preview-card {
   flex: 0 0 auto;
-  width: min(560px, calc(100% - 15px));
+  width: var(--card-w);
   padding: 0;
   overflow: hidden;
   border-color: var(--line-strong);
@@ -649,22 +653,19 @@ button:disabled { cursor: default; opacity: .45; }
   align-items: center;
   gap: 7px;
   min-width: 0;
-  font-size: 18px;
-  line-height: 1.1;
-  letter-spacing: 0;
+  line-height: 1.2;
 }
 .live-dot {
-  width: 10px;
-  height: 10px;
+  width: 9px;
+  height: 9px;
   border-radius: 0;
   background: var(--acc);
   animation: liveBlink 1s steps(1) infinite;
 }
 .live-preview-status {
-  color: #aaa49c;
-  font-size: 14px;
-  font-weight: 700;
-  line-height: 1.2;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.4;
   white-space: nowrap;
 }
 .preview-placeholder {
@@ -701,15 +702,14 @@ button:disabled { cursor: default; opacity: .45; }
   height: 240px;
   border: 0;
   border-bottom: var(--bw) solid var(--line-strong);
-  background: #f6f7fa;
+  background: var(--surface);
 }
 .live-preview-note {
-  padding: 14px 18px 4px;
-  color: #aaa49c;
+  padding: 12px 14px 4px;
+  color: var(--muted);
   background: transparent;
-  font-size: 13px;
-  font-weight: 700;
-  line-height: 1.45;
+  font-size: 12px;
+  line-height: 1.6;
 }
 .live-preview-card.is-stopped .live-dot {
   animation: none;
@@ -773,7 +773,7 @@ button:disabled { cursor: default; opacity: .45; }
   gap: 10px;
 }
 .delivery-actions button, .delivery-actions a, .email-row button {
-  min-height: 36px;
+  min-height: var(--btn-h);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -784,7 +784,7 @@ button:disabled { cursor: default; opacity: .45; }
   padding: 0 12px;
   text-decoration: none;
   font-size: 12.5px;
-  font-weight: 700;
+  font-weight: 600;
 }
 .delivery-actions button::before, .delivery-actions a::before, .email-row button::before { content: "[ "; }
 .delivery-actions button::after, .delivery-actions a::after, .email-row button::after { content: " ]"; }
@@ -884,7 +884,7 @@ input:focus, textarea:focus { border-color: var(--acc); }
 
 .upload-card {
   align-self: flex-start;
-  width: min(520px, calc(100% - 15px));
+  width: var(--card-w);
   margin-left: 15px;
   display: grid;
   gap: 10px;
@@ -893,12 +893,26 @@ input:focus, textarea:focus { border-color: var(--acc); }
   border-radius: 0;
   background: transparent;
 }
-.upload-card strong {
+.upload-card strong,
+.image-gen-card strong,
+.live-preview-head strong {
   color: var(--ink);
   font-size: 13px;
+  font-weight: 700;
 }
-.upload-card strong::before { content: "┌ "; color: var(--acc); }
-.upload-card strong::after { content: " ┐"; color: var(--acc); }
+.upload-card strong::before,
+.image-gen-card strong::before,
+.live-preview-head strong::before { content: "┌ "; color: var(--muted); }
+.upload-card strong::after,
+.image-gen-card strong::after,
+.live-preview-head strong::after { content: " ┐"; color: var(--muted); }
+.card-thumb {
+  width: 96px;
+  height: 96px;
+  object-fit: cover;
+  border: var(--bw) solid var(--line-strong);
+  border-radius: 0;
+}
 .upload-card p {
   margin: 0;
   color: var(--muted);
@@ -924,13 +938,14 @@ input:focus, textarea:focus { border-color: var(--acc); }
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-height: 38px;
+  min-height: var(--btn-h);
   padding: 0 12px;
   border: var(--bw) solid var(--line-strong);
   border-radius: 0;
   background: transparent;
   color: var(--ink);
-  font-weight: 500;
+  font-weight: 600;
+  font-size: 12.5px;
   cursor: pointer;
 }
 .upload-card label::before, .upload-card .submit-upload::before { content: "[ "; }
@@ -947,12 +962,13 @@ input:focus, textarea:focus { border-color: var(--acc); }
 }
 .upload-card label input { display: none; }
 .upload-card .skip-upload {
-  min-height: 38px;
+  min-height: var(--btn-h);
   border: var(--bw) solid var(--line);
   border-radius: 0;
   background: transparent;
   color: var(--muted);
   padding: 0 12px;
+  font-size: 12.5px;
 }
 .upload-card .skip-upload::before { content: "[ "; }
 .upload-card .skip-upload::after { content: " ]"; }
