@@ -269,6 +269,10 @@ function ensure_page_meta($html, array $meta) {
 
 function capture_page_image($slug) {
     if (!xlog_config('screenshot.enabled', true)) return null;
+    if (!function_exists('exec')) {
+        error_log('capture_page_image skipped: exec() is disabled');
+        return null;
+    }
     $script = XLOG_ROOT . '/scripts/capture-page.js';
     $html = xlog_config('site_dir') . '/' . $slug . '.html';
     $outRel = '/site-assets/' . $slug . '/page-shot.png';

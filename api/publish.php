@@ -82,11 +82,12 @@ try {
     sse_event('stage', ['stage' => 'generating']);
     $messages = session_messages($sessionId) ?: [];
     $images = session_images_context($sessionId);
+    $generationMessages = generation_context_messages($messages);
     $system = prompt_text('gen-system.txt') . "\n\n" . t('prompt', 'genLanguage', $locale);
     $context = "【图片清单 JSON】\n" . json_encode($images, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
     $modelMessages = [
         ['role' => 'system', 'content' => $system],
-        ['role' => 'user', 'content' => "下面是完整对话历史 JSON，请生成最终页面。\n" . json_encode($messages, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) . "\n\n" . $context],
+        ['role' => 'user', 'content' => "下面是精简后的最新有效对话上下文 JSON，请生成最终页面。旧的已发布页面、系统事件和交付卡片已被移除；图片地址一律以图片清单 JSON 为准。\n" . json_encode($generationMessages, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) . "\n\n" . $context],
     ];
     $raw = '';
     $usage = ai_stream_generate($modelMessages, function ($delta) use (&$raw) {
@@ -231,6 +232,65 @@ function restore_publish_session_state($sessionId, $state, &$locked) {
 function api_turnstile_ok($token) {
     if (!xlog_config('turnstile.enabled', false)) return true;
     return turnstile_verify($token, client_ip())['ok'];
+}
+
+function generation_context_messages(array $messages) {
+    $budget = 24000;
+    $total = 0;
+    $kept = [];
+    for ($i = count($messages) - 1; $i >= 0; $i--) {
+        $message = $messages[$i];
+        $role = (string)($message['role'] ?? '');
+        if (!in_array($role, ['user', 'assistant'], true)) continue;
+        $content = trim((string)($message['content'] ?? ''));
+        if ($content === '') continue;
+        $isImageMarker = preg_match('/^\[图片已(上传|生成):/u', $content);
+        if (!$isImageMarker && generation_context_skip_message($content)) continue;
+
+        $limit = $role === 'user' ? 3000 : 1600;
+        if ($isImageMarker) $limit = 1400;
+        $content = generation_context_clamp_text($content, $limit);
+        $len = mb_strlen($content, 'UTF-8');
+        if (!$isImageMarker && $total + $len > $budget) continue;
+
+        $kept[] = ['role' => $role, 'content' => $content];
+        $total += $len;
+        if ($total >= $budget) break;
+    }
+    $kept = array_reverse($kept);
+    return $kept ?: array_slice(array_map(function ($message) {
+        return [
+            'role' => in_array(($message['role'] ?? ''), ['user', 'assistant'], true) ? $message['role'] : 'user',
+            'content' => generation_context_clamp_text((string)($message['content'] ?? ''), 1200),
+        ];
+    }, $messages), -12);
+}
+
+function generation_context_skip_message($content) {
+    if (preg_match('/^\[(图片已上传|圖片已上傳|图片已生成|圖片已生成)/u', $content)) {
+        return false;
+    }
+    if (preg_match('/^\[(系统事件|系統事件|当前页面信息|目前頁面資訊)/u', $content)) {
+        return true;
+    }
+    if (preg_match('/^(页面已上线|頁面已上線|最终页面已嵌入|最終頁面已嵌入|页面写入完成|頁面寫入完成)/u', $content)) {
+        return true;
+    }
+    if (strpos($content, 'Page Forge Stream') !== false) return true;
+    if (preg_match('/https:\/\/[a-z0-9-]+\.xlog\.ink\//i', $content) && mb_strlen($content, 'UTF-8') < 500) {
+        return true;
+    }
+    return false;
+}
+
+function generation_context_clamp_text($text, $max) {
+    $text = trim((string)$text);
+    if (mb_strlen($text, 'UTF-8') <= $max) return $text;
+    $headLen = max(1, (int)floor($max * 0.65));
+    $tailLen = max(1, (int)floor($max * 0.25));
+    $head = mb_substr($text, 0, $headLen, 'UTF-8');
+    $tail = mb_substr($text, -$tailLen, null, 'UTF-8');
+    return $head . "\n...[中间内容已压缩]...\n" . $tail;
 }
 
 function extract_html_document($raw) {

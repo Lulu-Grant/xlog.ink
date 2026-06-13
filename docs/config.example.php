@@ -32,7 +32,7 @@ return [
             'format' => 'anthropic',
             'key' => '<GEN_API_KEY>',
             'max_tokens' => 49152,
-            'stream' => false,
+            'stream' => true,
             'fallbacks' => [
                 [
                     'base_url' => 'https://api.tu-zi.com',
@@ -40,7 +40,7 @@ return [
                     'format' => 'openai',
                     'key' => '<GEN_FALLBACK_API_KEY>',
                     'max_tokens' => 49152,
-                    'stream' => false,
+                    'stream' => true,
                 ],
             ],
         ],

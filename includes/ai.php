@@ -295,9 +295,14 @@ function ai_stream_request($purpose, array $messages, callable $onDelta) {
         try {
             $format = $cfg['format'] ?? 'openai';
             if ($format === 'anthropic') {
-                return ai_stream_anthropic($cfg, $messages, $wrappedDelta);
+                $result = ai_stream_anthropic($cfg, $messages, $wrappedDelta);
+            } else {
+                $result = ai_stream_openai($cfg, $messages, $wrappedDelta);
             }
-            return ai_stream_openai($cfg, $messages, $wrappedDelta);
+            if (!$emitted) {
+                throw new RuntimeException('AI gateway returned empty content');
+            }
+            return $result;
         } catch (Throwable $e) {
             $errors[] = ($cfg['model'] ?? 'unknown') . ': ' . $e->getMessage();
             error_log('AI provider failed for ' . $purpose . ': ' . end($errors));
