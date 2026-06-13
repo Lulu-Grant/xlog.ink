@@ -408,6 +408,45 @@
     if (inputEl) inputEl.focus();
   }
 
+  function imageGenLoadingHtml(prompt) {
+    return '' +
+      '<div class="image-gen-loading" role="status" aria-live="polite">' +
+      '<svg class="image-gen-loader-svg" viewBox="0 0 220 96" aria-hidden="true">' +
+      '<defs>' +
+      '<linearGradient id="xlogImageGenBeam" x1="0" x2="1" y1="0" y2="1">' +
+      '<stop offset="0" stop-color="currentColor" stop-opacity=".18"/>' +
+      '<stop offset=".52" stop-color="currentColor" stop-opacity=".88"/>' +
+      '<stop offset="1" stop-color="currentColor" stop-opacity=".2"/>' +
+      '</linearGradient>' +
+      '</defs>' +
+      '<rect x="16" y="18" width="188" height="60" rx="0" fill="none" stroke="currentColor" stroke-width="2"/>' +
+      '<path class="image-gen-scan" d="M26 30H194M26 48H194M26 66H194" fill="none" stroke="url(#xlogImageGenBeam)" stroke-width="3" stroke-linecap="square"/>' +
+      '<rect class="image-gen-cursor" x="34" y="28" width="18" height="18" fill="currentColor"/>' +
+      '<path class="image-gen-mountain" d="M46 68l31-26 25 18 18-14 38 22H46z" fill="none" stroke="currentColor" stroke-width="3" stroke-linejoin="miter"/>' +
+      '<circle class="image-gen-sun" cx="159" cy="38" r="9" fill="none" stroke="currentColor" stroke-width="3"/>' +
+      '</svg>' +
+      '<div class="image-gen-loading-copy">' +
+      '<strong>' + escapeHtml(t('imageGenLoadingTitle')) + '</strong>' +
+      '<span>' + escapeHtml(t('imageGenLoadingBody', { prompt: prompt })) + '</span>' +
+      '</div>' +
+      '</div>';
+  }
+
+  function setImageGenLoading(card, prompt, loading) {
+    if (!card) return;
+    var inputEl = card.querySelector('.image-gen-prompt');
+    var buttonEl = card.querySelector('button[data-confirm-image-gen]');
+    if (inputEl) inputEl.disabled = loading;
+    if (buttonEl) buttonEl.disabled = loading;
+    card.dataset.loading = loading ? '1' : '0';
+    var existing = card.querySelector('.image-gen-loading');
+    if (loading) {
+      if (!existing) card.insertAdjacentHTML('beforeend', imageGenLoadingHtml(prompt));
+    } else if (existing) {
+      existing.remove();
+    }
+  }
+
   function setQuota(q) {
     if (!q) return;
     var text = q.credits !== undefined ? t('quotaCredits', { credits: q.credits }) : t('quotaRemaining', { remaining: q.remaining, limit: q.limit });
@@ -1003,23 +1042,24 @@
       var promptInput = imageCard ? imageCard.querySelector('.image-gen-prompt') : null;
       var prompt = promptInput ? promptInput.value.trim() : '';
       if (!prompt || imageGen.disabled) return;
-      imageGen.disabled = true;
+      setImageGenLoading(imageCard, prompt, true);
       api('/api/image-generate.php', { session_id: state.sessionId, prompt: prompt, slot: imageCard ? imageCard.dataset.slot : 'hero' }).then(function (r) {
         if (r.error) {
           addMessage('system', r.error.message);
-          imageGen.disabled = false;
+          setImageGenLoading(imageCard, prompt, false);
           return;
         }
         disableCard(imageCard);
         if (imageCard) {
           imageCard.dataset.active = '0';
-          imageCard.innerHTML = '<strong>' + escapeHtml(t('imageGenTitle')) + '</strong><p>' + escapeHtml(prompt) + '</p><img src="' + escapeAttr(r.url) + '" alt="" class="card-thumb">';
+          imageCard.dataset.loading = '0';
+          imageCard.innerHTML = '<div class="action-title">' + escapeHtml(t('imageGenTitle')) + '</div><p>' + escapeHtml(prompt) + '</p><img src="' + escapeAttr(r.url) + '" alt="" class="card-thumb">';
         }
         addMessage('assistant', t('imageGenerated', { url: r.url }));
         sendMessage(t('imageUploadedChatMessage', { caption: prompt }));
       }).catch(function () {
         addMessage('system', t('sendFailed'));
-        imageGen.disabled = false;
+        setImageGenLoading(imageCard, prompt, false);
       });
       return;
     }
