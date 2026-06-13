@@ -23,10 +23,20 @@ function xlog_default_config() {
         'ai' => [
             'base_url' => getenv('XLOG_AI_BASE_URL') ?: 'https://api.3s3.org',
             'chat' => [
-                'model' => getenv('XLOG_CHAT_MODEL') ?: 'google/gemma-4-26B-A4B-it',
+                'base_url' => getenv('XLOG_CHAT_BASE_URL') ?: 'https://api.tu-zi.com',
+                'model' => getenv('XLOG_CHAT_MODEL') ?: 'gpt-5.4-mini',
                 'format' => getenv('XLOG_CHAT_FORMAT') ?: 'openai',
                 'key' => getenv('XLOG_CHAT_API_KEY') ?: '',
                 'max_tokens' => 1024,
+                'fallbacks' => [
+                    [
+                        'base_url' => getenv('XLOG_CHAT_FALLBACK_BASE_URL') ?: 'https://api.3s3.org',
+                        'model' => getenv('XLOG_CHAT_FALLBACK_MODEL') ?: 'google/gemma-4-26B-A4B-it',
+                        'format' => getenv('XLOG_CHAT_FALLBACK_FORMAT') ?: 'openai',
+                        'key' => getenv('XLOG_CHAT_FALLBACK_API_KEY') ?: '',
+                        'max_tokens' => 1024,
+                    ],
+                ],
             ],
             'gen' => [
                 'model' => getenv('XLOG_GEN_MODEL') ?: 'claude-sonnet-4-6',

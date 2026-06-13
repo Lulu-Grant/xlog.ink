@@ -12,14 +12,15 @@ return [
     'ai' => [
         'base_url' => 'https://api.3s3.org',
         'chat' => [
-            'model' => 'google/gemma-4-26B-A4B-it',
+            'base_url' => 'https://api.tu-zi.com',
+            'model' => 'gpt-5.4-mini',
             'format' => 'openai',
             'key' => '<CHAT_API_KEY>',
             'max_tokens' => 1024,
             'fallbacks' => [
                 [
-                    'base_url' => 'https://api.tu-zi.com',
-                    'model' => 'gpt-5.4-mini',
+                    'base_url' => 'https://api.3s3.org',
+                    'model' => 'google/gemma-4-26B-A4B-it',
                     'format' => 'openai',
                     'key' => '<CHAT_FALLBACK_API_KEY>',
                     'max_tokens' => 1024,
