@@ -238,7 +238,13 @@
         '<span class="live-preview-status">' + escapeHtml(t('previewStarting')) + '</span>' +
         '</div>' +
         buildPreviewPlaceholder() +
-        '<iframe class="live-preview-frame" title="' + escapeAttr(t('previewFrameTitle')) + '" sandbox="" referrerpolicy="no-referrer" hidden></iframe>' +
+        '<div class="final-preview-shot" hidden>' +
+        '<img class="final-preview-image" alt="' + escapeAttr(t('previewFrameTitle')) + '" hidden>' +
+        '<div class="final-preview-fallback" hidden>' +
+        '<span>' + escapeHtml(t('previewWaitingTitle')) + '</span>' +
+        '<small>' + escapeHtml(t('finalPreviewNote')) + '</small>' +
+        '</div>' +
+        '</div>' +
         '<div class="live-preview-note">' + escapeHtml(t('previewNote')) + '</div>' +
         '<div class="delivery-panel" hidden>' +
         '<div class="delivery-body">' +
@@ -269,13 +275,15 @@
     updateLivePreviewStatus(t('previewStarting'));
     var placeholder = card.querySelector('.preview-placeholder');
     if (placeholder) placeholder.hidden = false;
-    var iframe = card.querySelector('.live-preview-frame');
-    if (iframe) {
-      iframe.hidden = true;
-      iframe.src = 'about:blank';
-      iframe.removeAttribute('data-preview-url');
-      iframe.setAttribute('sandbox', '');
+    var shot = card.querySelector('.final-preview-shot');
+    if (shot) shot.hidden = true;
+    var image = card.querySelector('.final-preview-image');
+    if (image) {
+      image.hidden = true;
+      image.removeAttribute('src');
     }
+    var fallback = card.querySelector('.final-preview-fallback');
+    if (fallback) fallback.hidden = true;
     var note = card.querySelector('.live-preview-note');
     if (note) note.textContent = t('previewNote');
     var panel = card.querySelector('.delivery-panel');
@@ -295,11 +303,21 @@
     else delete card.dataset.pageImageUrl;
     var placeholder = card.querySelector('.preview-placeholder');
     if (placeholder) placeholder.hidden = true;
-    var iframe = card.querySelector('.live-preview-frame');
-    iframe.hidden = false;
-    iframe.removeAttribute('data-preview-url');
-    iframe.setAttribute('sandbox', 'allow-scripts allow-same-origin allow-popups');
-    iframe.src = url;
+    var shot = card.querySelector('.final-preview-shot');
+    if (shot) shot.hidden = false;
+    var image = card.querySelector('.final-preview-image');
+    var fallback = card.querySelector('.final-preview-fallback');
+    if (image && pageImageUrl) {
+      image.src = pageImageUrl;
+      image.hidden = false;
+      if (fallback) fallback.hidden = true;
+    } else {
+      if (image) {
+        image.hidden = true;
+        image.removeAttribute('src');
+      }
+      if (fallback) fallback.hidden = false;
+    }
     var note = card.querySelector('.live-preview-note');
     if (note) note.textContent = t('finalPreviewNote');
     var panel = card.querySelector('.delivery-panel');

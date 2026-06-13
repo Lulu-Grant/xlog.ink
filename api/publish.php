@@ -109,7 +109,7 @@ try {
     $desiredSlug = trim((string)($session['desired_slug'] ?? ''));
     $slugResult = $editPage
         ? ['slug' => $session['page_slug'], 'source' => 'edit']
-        : generate_semantic_slug($messages, $title, $desiredSlug);
+        : generate_semantic_slug($generationMessages, $title, $desiredSlug);
     $pageSlug = $slugResult['slug'];
     $html = move_session_assets_to_slug($sessionId, $pageSlug, $html);
     $adult = assess_session_adult($sessionId, $messages);
@@ -121,7 +121,7 @@ try {
     $adultFlagCleared = $editPage && !empty($editPage['is_adult']) && !$isAdult;
     $ogImagePath = first_session_image_path($sessionId);
     $ogImageUrl = $ogImagePath ? image_public_url($ogImagePath) : '';
-    $description = excerpt_plain_text($title . ' ' . json_encode($messages, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES), 150);
+    $description = excerpt_plain_text($title . ' ' . json_encode($generationMessages, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES), 150);
     $html = ensure_page_meta($html, [
         'title' => $title,
         'description' => $description,
@@ -157,7 +157,7 @@ try {
             file_put_contents($path, $html, LOCK_EX);
         }
     }
-    $type = infer_page_type($messages);
+    $type = infer_page_type($generationMessages);
     $lang = normalize_locale(extract_html_lang($html)) ?: $locale;
     $now = now_iso();
     $cost = (int)(($usage['input_tokens'] ?? 0) + ($usage['output_tokens'] ?? 0));

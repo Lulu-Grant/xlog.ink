@@ -19,7 +19,7 @@ $allAppCopy = get_i18n()['app'];
   <meta property="og:title" content="<?php echo h($appCopy['pageTitle']); ?>">
   <meta property="og:description" content="<?php echo h($appCopy['ogDescription']); ?>">
   <meta property="og:image" content="/assets/og/cover.jpg">
-  <link rel="stylesheet" href="/css/page-ai.css?v=20260613v44">
+  <link rel="stylesheet" href="/css/page-ai.css?v=20260613v45">
   <link rel="icon" href="/favicon.ico">
   <?php if ($turnstileEnabled && $turnstileSiteKey !== ''): ?>
   <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
@@ -88,6 +88,6 @@ $allAppCopy = get_i18n()['app'];
   window.XLOG_I18N = <?php echo json_encode($allAppCopy, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES); ?>;
   </script>
   <script src="/js/qrcode.min.js?v=1.4.4"></script>
-  <script src="/js/ai-app.js?v=20260613v41"></script>
+  <script src="/js/ai-app.js?v=20260613v42"></script>
 </body>
 </html>

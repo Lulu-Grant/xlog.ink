@@ -224,7 +224,7 @@ function generate_semantic_slug(array $messages, $title = '', $desired = '') {
 
 function first_session_image_path($sessionId) {
     $row = db_one(
-        "SELECT path FROM images WHERE session_id = ? AND slug IS NOT NULL ORDER BY CASE slot WHEN 'hero' THEN 0 WHEN 'product' THEN 1 WHEN 'avatar' THEN 2 ELSE 3 END, id ASC LIMIT 1",
+        "SELECT path FROM images WHERE session_id = ? AND slug IS NOT NULL ORDER BY CASE slot WHEN 'hero' THEN 0 WHEN 'product' THEN 1 WHEN 'avatar' THEN 2 ELSE 3 END, id DESC LIMIT 1",
         [$sessionId]
     );
     return $row['path'] ?? '';

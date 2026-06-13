@@ -287,7 +287,8 @@ function rewrite_session_message_asset_urls($sessionId, array $mappings) {
 }
 
 function session_images_context($sessionId) {
-    $rows = db_all('SELECT path, caption, slot, source, width, height FROM images WHERE session_id = ? ORDER BY id ASC', [$sessionId]);
+    $rows = db_all('SELECT path, caption, slot, source, width, height FROM images WHERE session_id = ? ORDER BY id DESC LIMIT 8', [$sessionId]);
+    $rows = array_reverse($rows);
     $out = [];
     foreach ($rows as $row) {
         $out[] = [
