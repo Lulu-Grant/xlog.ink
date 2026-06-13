@@ -1,6 +1,9 @@
 <?php
 require_once __DIR__ . '/../includes/ai.php';
 
+@set_time_limit(120);
+@ini_set('max_execution_time', '120');
+
 require_method('POST');
 $data = json_input();
 $locale = resolve_locale($data['locale'] ?? null);

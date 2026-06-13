@@ -14,12 +14,35 @@ function ai_config($purpose) {
     return $cfg;
 }
 
-function ai_has_key($purpose) {
-    $cfg = ai_config($purpose);
+function ai_configs($purpose) {
+    $primary = ai_config($purpose);
+    $configs = [$primary];
+    $fallbacks = $primary['fallbacks'] ?? [];
+    if (is_array($fallbacks)) {
+        foreach ($fallbacks as $fallback) {
+            if (!is_array($fallback)) continue;
+            $cfg = $primary;
+            unset($cfg['fallbacks']);
+            $cfg = xlog_array_merge_deep($cfg, $fallback);
+            $cfg['base_url'] = rtrim($cfg['base_url'] ?? xlog_config('ai.base_url'), '/');
+            $configs[] = $cfg;
+        }
+    }
+    return $configs;
+}
+
+function ai_config_has_key(array $cfg) {
     return !empty($cfg['model'])
         && strpos((string)$cfg['model'], '<') === false
         && !empty($cfg['key'])
         && strpos((string)$cfg['key'], '<') === false;
+}
+
+function ai_has_key($purpose) {
+    foreach (ai_configs($purpose) as $cfg) {
+        if (ai_config_has_key($cfg)) return true;
+    }
+    return false;
 }
 
 function ai_stream_chat(array $messages, callable $onDelta) {
@@ -44,7 +67,20 @@ function ai_generate_image($prompt, array $options = []) {
     if (!ai_has_key('image')) {
         return null;
     }
-    $cfg = ai_config('image');
+    $errors = [];
+    foreach (ai_configs('image') as $cfg) {
+        if (!ai_config_has_key($cfg)) continue;
+        try {
+            return ai_generate_image_with_config($cfg, $prompt, $options);
+        } catch (Throwable $e) {
+            $errors[] = ($cfg['model'] ?? 'unknown') . ': ' . $e->getMessage();
+            error_log('AI image provider failed: ' . end($errors));
+        }
+    }
+    throw new RuntimeException('All image providers failed: ' . implode(' | ', $errors));
+}
+
+function ai_generate_image_with_config(array $cfg, $prompt, array $options = []) {
     $format = $cfg['format'] ?? 'openai_image';
     if ($format !== 'openai_image') {
         throw new RuntimeException('Unsupported image generation format');
@@ -213,12 +249,29 @@ function ai_stream_string($text, callable $onDelta) {
 }
 
 function ai_stream_request($purpose, array $messages, callable $onDelta) {
-    $cfg = ai_config($purpose);
-    $format = $cfg['format'] ?? 'openai';
-    if ($format === 'anthropic') {
-        return ai_stream_anthropic($cfg, $messages, $onDelta);
+    $errors = [];
+    foreach (ai_configs($purpose) as $cfg) {
+        if (!ai_config_has_key($cfg)) continue;
+        $emitted = false;
+        $wrappedDelta = function ($delta) use ($onDelta, &$emitted) {
+            if ($delta !== '') $emitted = true;
+            $onDelta($delta);
+        };
+        try {
+            $format = $cfg['format'] ?? 'openai';
+            if ($format === 'anthropic') {
+                return ai_stream_anthropic($cfg, $messages, $wrappedDelta);
+            }
+            return ai_stream_openai($cfg, $messages, $wrappedDelta);
+        } catch (Throwable $e) {
+            $errors[] = ($cfg['model'] ?? 'unknown') . ': ' . $e->getMessage();
+            error_log('AI provider failed for ' . $purpose . ': ' . end($errors));
+            if ($emitted) {
+                throw new RuntimeException('AI stream failed after output started: ' . $e->getMessage());
+            }
+        }
     }
-    return ai_stream_openai($cfg, $messages, $onDelta);
+    throw new RuntimeException('All AI providers failed for ' . $purpose . ': ' . implode(' | ', $errors));
 }
 
 function ai_curl_json($url, array $headers, array $payload) {

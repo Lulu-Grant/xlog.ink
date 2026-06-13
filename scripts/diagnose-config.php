@@ -24,9 +24,11 @@ diag('site_dir', is_writable(xlog_config('site_dir')), xlog_config('site_dir'));
 diag('asset_dir', is_writable(xlog_config('asset_dir')), xlog_config('asset_dir'));
 
 foreach (['chat', 'gen', 'image', 'moderation'] as $purpose) {
-    $ai = ai_config($purpose);
-    $hasKey = !empty($ai['model']) && strpos((string)$ai['model'], '<') === false && !empty($ai['key']) && strpos((string)$ai['key'], '<') === false;
-    diag("AI {$purpose} config", $hasKey, $ai['base_url'] . ' · ' . $ai['model'] . ' · ' . $ai['format']);
+    $models = [];
+    foreach (ai_configs($purpose) as $idx => $ai) {
+        $models[] = ($idx === 0 ? 'primary=' : 'fallback' . $idx . '=') . ($ai['base_url'] ?? '') . ' · ' . ($ai['model'] ?? '') . ' · ' . ($ai['format'] ?? '');
+    }
+    diag("AI {$purpose} config", ai_has_key($purpose), implode(' | ', $models));
 }
 
 if ($liveAi) {

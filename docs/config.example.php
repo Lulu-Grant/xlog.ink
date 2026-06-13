@@ -16,15 +16,33 @@ return [
             'format' => 'openai',
             'key' => '<CHAT_API_KEY>',
             'max_tokens' => 1024,
+            'fallbacks' => [
+                [
+                    'base_url' => 'https://api.tu-zi.com',
+                    'model' => 'gpt-5.4-mini',
+                    'format' => 'openai',
+                    'key' => '<CHAT_FALLBACK_API_KEY>',
+                    'max_tokens' => 1024,
+                ],
+            ],
         ],
         'gen' => [
             'model' => 'claude-sonnet-4-6',
             'format' => 'anthropic',
             'key' => '<GEN_API_KEY>',
             'max_tokens' => 49152,
+            'fallbacks' => [
+                [
+                    'base_url' => 'https://api.tu-zi.com',
+                    'model' => 'gpt-5.5',
+                    'format' => 'openai',
+                    'key' => '<GEN_FALLBACK_API_KEY>',
+                    'max_tokens' => 49152,
+                ],
+            ],
         ],
         'image' => [
-            'base_url' => 'https://api.3s3.org',
+            'base_url' => 'https://api.tu-zi.com',
             'model' => 'gpt-image-2',
             'format' => 'openai_image',
             'key' => '<IMAGE_API_KEY>',
@@ -32,6 +50,14 @@ return [
             'quality' => 'low',
             'output_format' => 'webp',
             'max_tokens' => 0,
+            'fallbacks' => [
+                [
+                    'base_url' => 'https://api.3s3.org',
+                    'model' => 'gpt-image-2',
+                    'format' => 'openai_image',
+                    'key' => '<IMAGE_FALLBACK_API_KEY>',
+                ],
+            ],
         ],
         'moderation' => [
             'base_url' => 'https://api.openai.com',
