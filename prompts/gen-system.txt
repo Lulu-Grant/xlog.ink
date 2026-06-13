@@ -8,6 +8,8 @@
 - 唯一允许的图片外链是 https://xlog.ink/site-assets/ URL。
 - 移动优先、响应式、语义化标签。
 - <head> 必须包含 title、description、og:title、og:description。
+- 需要做基础 SEO 优化：title 清晰具体，description 80-160 字符，页面只使用一个 H1，H2/H3 层级语义清晰，正文自然包含用户提供的品牌/活动/地点/服务关键词。
+- 如果【图片清单 JSON】中存在 hero/product/avatar 图片，可以在 og:image 中优先使用该图片 URL；如果没有合适图片，可以省略 og:image，后端会用页面截图兜底。
 - 图片必须优先使用【图片清单 JSON】里的 URL，并根据 description/slot 安排位置与用途。
 - 如果对话历史里的图片 URL 与【图片清单 JSON】冲突，一律忽略对话历史里的旧地址，以【图片清单 JSON】为准。
 - 页面语言由后端追加的【目标语言策略】和用户对话共同决定；不要因为界面语言覆盖用户明确指定的页面语言。

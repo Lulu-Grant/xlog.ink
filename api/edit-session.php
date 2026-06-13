@@ -6,7 +6,7 @@ $data = json_input();
 $locale = resolve_locale($data['locale'] ?? null);
 set_locale_cookie($locale);
 $slug = trim($data['slug'] ?? '');
-if (!preg_match('/^[a-z0-9]{10}$/', $slug)) api_error('bad_slug', 'Invalid page slug');
+if (!preg_match('/^[a-z0-9]{3,10}$/', $slug)) api_error('bad_slug', 'Invalid page slug');
 
 $page = db_one('SELECT * FROM pages WHERE slug = ? AND status = ?', [$slug, 'live']);
 if (!$page) api_error('not_found', 'Page not found', 404);

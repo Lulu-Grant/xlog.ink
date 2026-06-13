@@ -34,6 +34,27 @@ function xlog_default_config() {
                 'key' => getenv('XLOG_GEN_API_KEY') ?: '',
                 'max_tokens' => 49152,
             ],
+            'image' => [
+                'base_url' => getenv('XLOG_IMAGE_BASE_URL') ?: 'https://api.3s3.org',
+                'model' => getenv('XLOG_IMAGE_MODEL') ?: 'gpt-image-2',
+                'format' => getenv('XLOG_IMAGE_FORMAT') ?: 'openai_image',
+                'key' => getenv('XLOG_IMAGE_API_KEY') ?: '',
+                'size' => getenv('XLOG_IMAGE_SIZE') ?: '1024x1024',
+                'quality' => getenv('XLOG_IMAGE_QUALITY') ?: 'low',
+                'output_format' => getenv('XLOG_IMAGE_OUTPUT_FORMAT') ?: 'webp',
+                'max_tokens' => 0,
+            ],
+            'moderation' => [
+                'base_url' => getenv('XLOG_MODERATION_BASE_URL') ?: 'https://api.openai.com',
+                'model' => getenv('XLOG_MODERATION_MODEL') ?: 'omni-moderation-latest',
+                'format' => getenv('XLOG_MODERATION_FORMAT') ?: 'openai_moderation',
+                'key' => getenv('XLOG_MODERATION_API_KEY') ?: '',
+                'max_tokens' => 512,
+            ],
+        ],
+        'screenshot' => [
+            'enabled' => true,
+            'node' => getenv('XLOG_NODE_BIN') ?: 'node',
         ],
         'smtp' => [
             'host' => getenv('XLOG_SMTP_HOST') ?: '',
@@ -66,11 +87,20 @@ function xlog_config($key = null, $default = null) {
     static $config = null;
     if ($config === null) {
         $config = xlog_default_config();
-        $external = '/etc/xlog/config.php';
-        if (is_file($external)) {
-            $loaded = require $external;
-            if (is_array($loaded)) {
-                $config = xlog_array_merge_deep($config, $loaded);
+        $configPaths = [
+            XLOG_ROOT . '/config.php',
+            '/etc/xlog/config.php',
+        ];
+        $envPath = getenv('XLOG_CONFIG_PATH');
+        if ($envPath) {
+            $configPaths[] = $envPath;
+        }
+        foreach ($configPaths as $external) {
+            if (is_file($external)) {
+                $loaded = require $external;
+                if (is_array($loaded)) {
+                    $config = xlog_array_merge_deep($config, $loaded);
+                }
             }
         }
     }

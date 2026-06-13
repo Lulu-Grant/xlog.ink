@@ -196,10 +196,7 @@
     state.publishCard = addActionCard('publish-confirm-card',
       '<div class="action-title">' + escapeHtml(t('publishConfirmTitle')) + '</div>' +
       '<p>' + escapeHtml(t('publishConfirmBody')) + '</p>' +
-      '<label class="adult-toggle">' +
-      '<input class="inline-adult-checkbox" type="checkbox"' + (state.currentPageIsAdult ? ' checked' : '') + '>' +
-      '<span>' + escapeHtml(t('adultToggle')) + '</span>' +
-      '</label>' +
+      '<p class="action-muted">' + escapeHtml(t('adultAutoNotice')) + '</p>' +
       turnstile +
       '<div class="inline-actions">' +
       '<button type="button" class="publish-btn" data-confirm-publish="1">' + escapeHtml(t('confirmGenerate')) + '</button>' +
@@ -248,6 +245,7 @@
         '</div>' +
         '<div class="delivery-actions">' +
         '<a data-open-page="1" href="#" target="_blank" rel="noopener">' + escapeHtml(t('openPage')) + '</a>' +
+        '<button type="button" data-download-page-image="1" hidden>' + escapeHtml(t('downloadPageImage')) + '</button>' +
         '<button type="button" data-download-qr="1">' + escapeHtml(t('downloadQr')) + '</button>' +
         '<button type="button" data-copy-url="1">' + escapeHtml(t('copyLink')) + '</button>' +
         '</div>' +
@@ -282,7 +280,7 @@
     scrollDown(false);
   }
 
-  function finalizeLivePreview(url) {
+  function finalizeLivePreview(url, pageImageUrl) {
     if (!url) return;
     var card = ensureLivePreviewCard();
     stopLivePreview(t('pageOnline'));
@@ -290,6 +288,8 @@
     card.classList.add('is-final', 'delivery-card');
     card.classList.remove('is-previewing', 'is-stopped');
     card.dataset.pageUrl = url;
+    if (pageImageUrl) card.dataset.pageImageUrl = pageImageUrl;
+    else delete card.dataset.pageImageUrl;
     var placeholder = card.querySelector('.preview-placeholder');
     if (placeholder) placeholder.hidden = true;
     var iframe = card.querySelector('.live-preview-frame');
@@ -305,6 +305,8 @@
     if (urlBox) urlBox.textContent = url;
     var openLink = card.querySelector('[data-open-page]');
     if (openLink) openLink.href = url;
+    var imageBtn = card.querySelector('button[data-download-page-image]');
+    if (imageBtn) imageBtn.hidden = !pageImageUrl;
     var canvas = card.querySelector('.qr-canvas');
     if (!drawQr(canvas, url)) {
       var downloadBtn = card.querySelector('button[data-download-qr]');
@@ -326,24 +328,15 @@
     if (state.previewCard) state.previewCard.classList.add('is-stopped');
   }
 
-  function isPublishIntent(text) {
-    text = text || '';
-    if (/(不要|別|别|不用|不必|暫不|暂不|先不|無需|无需|取消|do not|don't|dont|no need|not now)\s*(生成|發布|发布|上線|上线|建立頁面|创建页面|開始生成|开始生成|開始做|开始做|重新生成|再做一个|再做一個|generate|publish|go live|create page)/i.test(text)) {
-      return false;
-    }
-    return /(直接|立即|現在|现在|確認|确认|可以|重新|再次|再|開始|开始|please|now|confirm|ready to)?\s*(生成|發布|发布|上線|上线|建立頁面|创建页面|開始生成|开始生成|開始做|开始做|重新生成|再做一个|再做一個|generate|publish|go live|create page)/i.test(text);
-  }
-
-  function handleAction(action, userPublishIntent) {
+  function handleAction(action) {
     if (!action || !action.type) return;
     var params = action.params || {};
     if (action.type === 'upload') addUploadCard(params);
     else if (action.type === 'ready') showGenerateCard(params.reason || t('readyFallback'));
-    else if (action.type === 'publish') {
-      if (userPublishIntent) state.pendingAutoPublish = params;
-      else showGenerateCard(params.reason || t('readyNeedsConfirm'));
-    }
+    else if (action.type === 'publish') state.pendingAutoPublish = params;
     else if (action.type === 'email') showEmailCard();
+    else if (action.type === 'domain') showDomainCard(params);
+    else if (action.type === 'image_gen') showImageGenCard(params);
   }
 
   function runAutoPublish(params) {
@@ -355,7 +348,7 @@
       return;
     }
     addMessage('system', params.reason ? t('publishConfirmedReason', { reason: params.reason }) : t('publishConfirmed'));
-    publish({ isAdult: state.currentPageIsAdult });
+    publish({});
   }
 
   function addUploadCard(params) {
@@ -394,6 +387,34 @@
       card.remove();
       sendMessage(t('skipUploadMessage'));
     });
+  }
+
+  function showDomainCard(params) {
+    params = params || {};
+    if (document.querySelector('.domain-card[data-active="1"]')) return;
+    var value = (params.prefix || params.hint || '').replace(/[^a-z0-9]/gi, '').toLowerCase().slice(0, 10);
+    var card = addActionCard('domain-card',
+      '<div class="action-title">' + escapeHtml(t('domainTitle')) + '</div>' +
+      '<p>' + escapeHtml(t('domainBody')) + '</p>' +
+      '<div class="email-row"><input class="domain-prefix" type="text" inputmode="latin" maxlength="10" placeholder="' + escapeAttr(t('domainPlaceholder')) + '" value="' + escapeAttr(value) + '"><button type="button" data-save-domain="1">' + escapeHtml(t('saveDomain')) + '</button></div>');
+    card.dataset.active = '1';
+    var inputEl = card.querySelector('.domain-prefix');
+    if (inputEl) inputEl.focus();
+  }
+
+  function showImageGenCard(params) {
+    params = params || {};
+    if (document.querySelector('.image-gen-card[data-active="1"]')) return;
+    var prompt = params.prompt || params.hint || '';
+    var card = addActionCard('image-gen-card',
+      '<div class="action-title">' + escapeHtml(t('imageGenTitle')) + '</div>' +
+      '<p>' + escapeHtml(t('imageGenBody')) + '</p>' +
+      '<input class="image-gen-prompt" type="text" maxlength="200" placeholder="' + escapeAttr(t('imageGenPrompt')) + '" value="' + escapeAttr(prompt) + '">' +
+      '<div class="inline-actions"><button type="button" class="publish-btn" data-confirm-image-gen="1">' + escapeHtml(t('confirmImageGen')) + '</button></div>');
+    card.dataset.active = '1';
+    card.dataset.slot = params.slot || 'hero';
+    var inputEl = card.querySelector('.image-gen-prompt');
+    if (inputEl) inputEl.focus();
   }
 
   function setQuota(q) {
@@ -584,7 +605,6 @@
       messages.classList.remove('is-hero');
       input.placeholder = t('composerPlaceholder');
     }
-    var publishIntent = isPublishIntent(text);
     if (state.awaitingEmail) {
       var contextualEmail = extractEmail(text);
       var skipEmailIntent = /(不(用|要|留|绑定|綁定)|暫不|暂不|跳過|跳过|算了|不用了|不要了|skip|no need|not now|no thanks)/i.test(text);
@@ -602,10 +622,6 @@
           setBusy(false);
         }
         return;
-      }
-      if (publishIntent) {
-        completeEmailCard(document.querySelector('.email-card[data-active="1"]'));
-        addMessage('system', t('emailClosedForNewPublish'));
       }
     }
     setBusy(true);
@@ -625,12 +641,12 @@
           ai.textContent += d.text || '';
           scrollDown(false);
         },
-        action: function (d) { handleAction(d, publishIntent); },
+        action: function (d) { handleAction(d); },
         notice: function (d) { addMessage('system', d.message || t('systemNotice')); },
         error: function (d) { addMessage('system', '[err] ' + (d.message || t('aiChatFailed'))); }
       });
     }).then(function () {
-      if (!state.pendingAutoPublish && publishIntent) showGenerateCard(t('mentionedGenerate'));
+      return;
     }).finally(function () {
       ai.classList.remove('is-typing');
       setBusy(false);
@@ -681,8 +697,7 @@
       body: JSON.stringify({
         session_id: state.sessionId,
         turnstile_token: turnstileToken,
-        locale: locale,
-        is_adult: !!(options && options.isAdult)
+        locale: locale
       })
     }).then(function (r) {
       var generatedChars = 0;
@@ -722,7 +737,7 @@
           state.currentPageIsAdult = !!d.is_adult;
           state.readyShown = false;
           state.publishCard = null;
-          finalizeLivePreview(d.url);
+          finalizeLivePreview(d.url, d.image_url || '');
           addMessage('assistant', t('publishedAskEmail'));
           showEmailCard();
           api('/api/auth/me.php', {}).then(function (me) { setUser(me.user); setQuota(me.quota); }).catch(function () {});
@@ -962,12 +977,58 @@
     var confirmPublish = e.target.closest('button[data-confirm-publish]');
     if (confirmPublish) {
       var publishCard = confirmPublish.closest('.action-card');
-      var checkbox = publishCard ? publishCard.querySelector('.inline-adult-checkbox') : null;
       var widget = publishCard && publishCard.dataset.turnstileWidget !== undefined ? publishCard.dataset.turnstileWidget : undefined;
       publish({
-        isAdult: !!(checkbox && checkbox.checked),
         turnstileWidget: widget,
         card: publishCard
+      });
+      return;
+    }
+    var saveDomain = e.target.closest('button[data-save-domain]');
+    if (saveDomain) {
+      var domainCard = saveDomain.closest('.domain-card');
+      var prefixInput = domainCard ? domainCard.querySelector('.domain-prefix') : null;
+      var prefix = prefixInput ? prefixInput.value.trim() : '';
+      if (!prefix || saveDomain.disabled) return;
+      saveDomain.disabled = true;
+      api('/api/domain-check.php', { session_id: state.sessionId, prefix: prefix }).then(function (r) {
+        if (r.error) {
+          addMessage('system', r.error.message);
+          saveDomain.disabled = false;
+          return;
+        }
+        disableCard(domainCard);
+        if (domainCard) domainCard.dataset.active = '0';
+        addMessage('assistant', t('domainSaved', { url: r.url }));
+      }).catch(function () {
+        addMessage('system', t('sendFailed'));
+        saveDomain.disabled = false;
+      });
+      return;
+    }
+    var imageGen = e.target.closest('button[data-confirm-image-gen]');
+    if (imageGen) {
+      var imageCard = imageGen.closest('.image-gen-card');
+      var promptInput = imageCard ? imageCard.querySelector('.image-gen-prompt') : null;
+      var prompt = promptInput ? promptInput.value.trim() : '';
+      if (!prompt || imageGen.disabled) return;
+      imageGen.disabled = true;
+      api('/api/image-generate.php', { session_id: state.sessionId, prompt: prompt, slot: imageCard ? imageCard.dataset.slot : 'hero' }).then(function (r) {
+        if (r.error) {
+          addMessage('system', r.error.message);
+          imageGen.disabled = false;
+          return;
+        }
+        disableCard(imageCard);
+        if (imageCard) {
+          imageCard.dataset.active = '0';
+          imageCard.innerHTML = '<strong>' + escapeHtml(t('imageGenTitle')) + '</strong><p>' + escapeHtml(prompt) + '</p><img src="' + escapeAttr(r.url) + '" alt="" style="width:96px;height:96px;object-fit:cover;border-radius:0">';
+        }
+        addMessage('assistant', t('imageGenerated', { url: r.url }));
+        sendMessage(t('imageUploadedChatMessage', { caption: prompt }));
+      }).catch(function () {
+        addMessage('system', t('sendFailed'));
+        imageGen.disabled = false;
       });
       return;
     }
@@ -1010,6 +1071,15 @@
       a.download = 'xlog-page-qr.png';
       a.href = canvas.toDataURL('image/png');
       a.click();
+      return;
+    }
+    if (e.target.closest('button[data-download-page-image]')) {
+      var imageUrl = delivery.dataset.pageImageUrl || '';
+      if (!imageUrl) return;
+      var imgLink = document.createElement('a');
+      imgLink.download = 'xlog-page.webp';
+      imgLink.href = imageUrl;
+      imgLink.click();
       return;
     }
   });

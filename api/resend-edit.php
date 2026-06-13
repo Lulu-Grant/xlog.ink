@@ -7,7 +7,7 @@ $locale = resolve_locale($data['locale'] ?? null);
 set_locale_cookie($locale);
 $email = normalize_email($data['email'] ?? '');
 $slug = trim($data['slug'] ?? '');
-if ($email === '' || !preg_match('/^[a-z0-9]{10}$/', $slug)) api_error('bad_request', 'Email and slug required');
+if ($email === '' || !preg_match('/^[a-z0-9]{3,10}$/', $slug)) api_error('bad_request', 'Email and slug required');
 $page = db_one('SELECT * FROM pages WHERE slug = ? AND email = ? AND editable = 1', [$slug, $email]);
 if (!$page) api_error('not_found', 'No editable page found', 404);
 $limitKey = $email . ':' . $slug;

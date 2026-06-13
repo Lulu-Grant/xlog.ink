@@ -23,6 +23,23 @@ return [
             'key' => '<GEN_API_KEY>',
             'max_tokens' => 49152,
         ],
+        'image' => [
+            'base_url' => 'https://api.3s3.org',
+            'model' => 'gpt-image-2',
+            'format' => 'openai_image',
+            'key' => '<IMAGE_API_KEY>',
+            'size' => '1024x1024',
+            'quality' => 'low',
+            'output_format' => 'webp',
+            'max_tokens' => 0,
+        ],
+        'moderation' => [
+            'base_url' => 'https://api.openai.com',
+            'model' => 'omni-moderation-latest',
+            'format' => 'openai_moderation',
+            'key' => '<OPENAI_MODERATION_API_KEY>',
+            'max_tokens' => 512,
+        ],
     ],
     'smtp' => [
         'host' => 'smtpdm-ap-southeast-1.aliyun.com',

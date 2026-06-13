@@ -7,6 +7,7 @@ function quota_limit_for($kind, $userId) {
     if ($kind === 'chat_turn') return 200;
     if ($kind === 'session_create') return $userId ? 200 : 50;
     if ($kind === 'upload_image') return $userId ? 400 : 80;
+    if ($kind === 'image_generate') return $userId ? 30 : 5;
     if ($kind === 'generate' && xlog_config('billing.credit_mode', false) && $userId) {
         return PHP_INT_MAX;
     }

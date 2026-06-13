@@ -63,6 +63,8 @@ CREATE TABLE IF NOT EXISTS sessions (
     messages TEXT NOT NULL DEFAULT '[]',
     state TEXT NOT NULL DEFAULT 'chatting',
     locale TEXT NOT NULL DEFAULT 'zh-CN',
+    desired_slug TEXT DEFAULT '',
+    slug_mode TEXT DEFAULT '',
     ip TEXT NOT NULL,
     client_id TEXT DEFAULT '',
     created_at TEXT NOT NULL,
@@ -75,6 +77,9 @@ CREATE TABLE IF NOT EXISTS images (
     path TEXT NOT NULL,
     caption TEXT DEFAULT '',
     slot TEXT DEFAULT '',
+    source TEXT DEFAULT 'upload',
+    adult_score REAL DEFAULT 0,
+    adult_reason TEXT DEFAULT '',
     width INTEGER,
     height INTEGER,
     created_at TEXT NOT NULL
@@ -131,7 +136,17 @@ CREATE INDEX IF NOT EXISTS idx_mail_events_lookup ON mail_events(kind, event_key
     db_ensure_column($pdo, 'sessions', 'edit_mode', "TEXT NOT NULL DEFAULT ''");
     db_ensure_column($pdo, 'sessions', 'client_id', "TEXT DEFAULT ''");
     db_ensure_column($pdo, 'sessions', 'locale', "TEXT NOT NULL DEFAULT 'zh-CN'");
+    db_ensure_column($pdo, 'sessions', 'desired_slug', "TEXT DEFAULT ''");
+    db_ensure_column($pdo, 'sessions', 'slug_mode', "TEXT DEFAULT ''");
     db_ensure_column($pdo, 'images', 'slot', "TEXT DEFAULT ''");
+    db_ensure_column($pdo, 'images', 'source', "TEXT DEFAULT 'upload'");
+    db_ensure_column($pdo, 'images', 'adult_score', "REAL DEFAULT 0");
+    db_ensure_column($pdo, 'images', 'adult_reason', "TEXT DEFAULT ''");
+    db_ensure_column($pdo, 'pages', 'adult_score', "REAL DEFAULT 0");
+    db_ensure_column($pdo, 'pages', 'adult_reason', "TEXT DEFAULT ''");
+    db_ensure_column($pdo, 'pages', 'og_image_path', "TEXT DEFAULT ''");
+    db_ensure_column($pdo, 'pages', 'screenshot_path', "TEXT DEFAULT ''");
+    db_ensure_column($pdo, 'pages', 'slug_source', "TEXT DEFAULT ''");
 }
 
 function db_ensure_column(PDO $pdo, $table, $column, $definition) {
@@ -219,4 +234,9 @@ function generate_unique_slug() {
         if (!$exists && !file_exists($dir . '/' . $slug . '.html')) return $slug;
     }
     throw new RuntimeException('Could not generate unique slug');
+}
+
+function slug_exists($slug) {
+    $dir = xlog_config('site_dir');
+    return (bool)db_one('SELECT slug FROM pages WHERE slug = ?', [$slug]) || file_exists($dir . '/' . $slug . '.html');
 }

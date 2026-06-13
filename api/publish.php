@@ -1,5 +1,6 @@
 <?php
 require_once __DIR__ . '/../includes/ai.php';
+require_once __DIR__ . '/../includes/content_tools.php';
 require_once __DIR__ . '/../includes/imageproc.php';
 require_once __DIR__ . '/../includes/page_edit.php';
 require_once __DIR__ . '/../includes/recent.php';
@@ -103,10 +104,26 @@ try {
 
     $html = extract_html_document($raw);
     validate_generated_html($html);
-    $pageSlug = $editPage ? $session['page_slug'] : generate_unique_slug();
+    $title = extract_title($html) ?: 'AI Page';
+    $desiredSlug = trim((string)($session['desired_slug'] ?? ''));
+    $slugResult = $editPage
+        ? ['slug' => $session['page_slug'], 'source' => 'edit']
+        : generate_semantic_slug($messages, $title, $desiredSlug);
+    $pageSlug = $slugResult['slug'];
     $html = move_session_assets_to_slug($sessionId, $pageSlug, $html);
-    $isAdult = !empty($data['is_adult']);
+    $adult = assess_session_adult($sessionId, $messages);
+    $isAdult = !empty($adult['is_adult']);
     $adultFlagCleared = $editPage && !empty($editPage['is_adult']) && !$isAdult;
+    $ogImagePath = first_session_image_path($sessionId);
+    $ogImageUrl = $ogImagePath ? image_public_url($ogImagePath) : '';
+    $description = excerpt_plain_text($title . ' ' . json_encode($messages, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES), 150);
+    $html = ensure_page_meta($html, [
+        'title' => $title,
+        'description' => $description,
+        'og_title' => $title,
+        'og_description' => $description,
+        'og_image' => $ogImageUrl,
+    ]);
     if ($isAdult) {
         $html = inject_adult_gate($html, $pageSlug, normalize_locale(extract_html_lang($html)) ?: $locale);
     }
@@ -119,17 +136,35 @@ try {
         throw new RuntimeException('Write failed');
     }
 
-    $title = extract_title($html) ?: 'AI Page';
+    $screenshotPath = capture_page_image($pageSlug);
+    if ($screenshotPath) {
+        $screenshotUrl = image_public_url($screenshotPath);
+        if ($ogImageUrl === '') {
+            $ogImagePath = $screenshotPath;
+            $ogImageUrl = $screenshotUrl;
+            $html = ensure_page_meta($html, [
+                'title' => $title,
+                'description' => $description,
+                'og_title' => $title,
+                'og_description' => $description,
+                'og_image' => $ogImageUrl,
+            ]);
+            file_put_contents($path, $html, LOCK_EX);
+        }
+    }
     $type = infer_page_type($messages);
     $lang = normalize_locale(extract_html_lang($html)) ?: $locale;
     $now = now_iso();
     $cost = (int)(($usage['input_tokens'] ?? 0) + ($usage['output_tokens'] ?? 0));
     if (db_one('SELECT slug FROM pages WHERE slug = ?', [$pageSlug])) {
-        db_exec('UPDATE pages SET title = ?, type = ?, lang = ?, updated_at = ?, cost_tokens = ?, session_id = ?, html_path = ?, is_adult = ? WHERE slug = ?', [$title, $type, $lang, $now, $cost, $sessionId, $path, $isAdult ? 1 : 0, $pageSlug]);
+        db_exec(
+            'UPDATE pages SET title = ?, type = ?, lang = ?, updated_at = ?, cost_tokens = ?, session_id = ?, html_path = ?, is_adult = ?, adult_score = ?, adult_reason = ?, og_image_path = ?, screenshot_path = ?, slug_source = ? WHERE slug = ?',
+            [$title, $type, $lang, $now, $cost, $sessionId, $path, $isAdult ? 1 : 0, $adult['score'], $adult['reason'], $ogImagePath, $screenshotPath ?: '', $slugResult['source'], $pageSlug]
+        );
     } else {
         db_exec(
-            'INSERT INTO pages (slug, title, type, lang, created_at, owner_user_id, status, cost_tokens, session_id, html_path, is_adult) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-            [$pageSlug, $title, $type, $lang, $now, current_user_id(), 'live', $cost, $sessionId, $path, $isAdult ? 1 : 0]
+            'INSERT INTO pages (slug, title, type, lang, created_at, owner_user_id, status, cost_tokens, session_id, html_path, is_adult, adult_score, adult_reason, og_image_path, screenshot_path, slug_source) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+            [$pageSlug, $title, $type, $lang, $now, current_user_id(), 'live', $cost, $sessionId, $path, $isAdult ? 1 : 0, $adult['score'], $adult['reason'], $ogImagePath, $screenshotPath ?: '', $slugResult['source']]
         );
     }
     db_exec('UPDATE sessions SET page_slug = ?, state = ?, updated_at = ? WHERE id = ?', [$pageSlug, 'done', $now, $sessionId]);
@@ -148,7 +183,16 @@ try {
     $url = 'https://' . $pageSlug . '.xlog.ink/';
     append_session_message($sessionId, 'system', '[系统事件] 页面已发布：' . $url . '。标题《' . $title . '》。如果用户继续要求修改，默认是修改这个页面；如果用户明确说“重新做一个/再生成一个/新页面”，则进入下一次发布流程。');
     sse_event('stage', ['stage' => 'done']);
-    sse_event('result', ['url' => $url, 'slug' => $pageSlug, 'qr_payload' => $url, 'is_adult' => $isAdult]);
+    sse_event('result', [
+        'url' => $url,
+        'slug' => $pageSlug,
+        'qr_payload' => $url,
+        'is_adult' => $isAdult,
+        'adult_reason' => $adult['reason'],
+        'slug_source' => $slugResult['source'],
+        'image_url' => $screenshotPath ? image_public_url($screenshotPath) : '',
+        'og_image_url' => $ogImageUrl,
+    ]);
     sse_event('done', ['usage' => $usage]);
 } catch (Throwable $e) {
     refund_generate_charge($quotaCharge);

@@ -2,6 +2,7 @@
 // Upload image normalization to webp.
 
 require_once __DIR__ . '/db.php';
+require_once __DIR__ . '/content_tools.php';
 
 function image_session_dir($sessionId) {
     return xlog_config('asset_dir') . '/tmp/' . preg_replace('/[^a-f0-9]/', '', $sessionId);
@@ -49,9 +50,10 @@ function image_process_upload($sessionId, array $file, $caption = '', $slot = ''
 
     $rel = '/site-assets/tmp/' . $sessionId . '/' . $n . '.webp';
     $slot = in_array($slot, ['hero', 'avatar', 'product', 'gallery'], true) ? $slot : '';
+    $adult = assess_uploaded_image_adult($file, $caption, $out, 'image/webp');
     db_exec(
-        'INSERT INTO images (session_id, path, caption, slot, width, height, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
-        [$sessionId, $rel, $caption, $slot, $newW, $newH, now_iso()]
+        'INSERT INTO images (session_id, path, caption, slot, source, adult_score, adult_reason, width, height, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        [$sessionId, $rel, $caption, $slot, 'upload', $adult['score'], $adult['reason'], $newW, $newH, now_iso()]
     );
     return [
         'id' => (int)db()->lastInsertId(),
@@ -60,6 +62,138 @@ function image_process_upload($sessionId, array $file, $caption = '', $slot = ''
         'slot' => $slot,
         'width' => $newW,
         'height' => $newH,
+        'adult_score' => $adult['score'],
+    ];
+}
+
+function image_create_generated_placeholder($sessionId, $prompt, $slot = 'hero') {
+    $prompt = mb_substr(trim((string)$prompt), 0, 500, 'UTF-8');
+    if ($prompt === '') throw new RuntimeException('Prompt required');
+    $slot = in_array($slot, ['hero', 'avatar', 'product', 'gallery'], true) ? $slot : 'hero';
+    $dir = image_session_dir($sessionId);
+    if (!is_dir($dir)) @mkdir($dir, 0755, true);
+    $count = db_one('SELECT COUNT(*) AS c FROM images WHERE session_id = ?', [$sessionId]);
+    $n = (int)($count['c'] ?? 0) + 1;
+    if ($n > 8) throw new RuntimeException('Up to 8 images per session');
+    $out = $dir . '/gen-' . $n . '.webp';
+    $rel = '/site-assets/tmp/' . $sessionId . '/gen-' . $n . '.webp';
+    if (ai_has_key('image')) {
+        try {
+            $generated = ai_generate_image($prompt, [
+                'size' => '1024x1024',
+                'quality' => 'low',
+                'output_format' => 'webp',
+            ]);
+            if (is_array($generated)) {
+                [$w, $h] = image_write_generated_bytes($generated['bytes'], $generated['mime'], $out);
+                $adult = assess_generated_image_adult($prompt, $out);
+                db_exec(
+                    'INSERT INTO images (session_id, path, caption, slot, source, adult_score, adult_reason, width, height, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+                    [$sessionId, $rel, $prompt, $slot, 'generated_ai', $adult['score'], $adult['reason'], $w, $h, now_iso()]
+                );
+                return [
+                    'id' => (int)db()->lastInsertId(),
+                    'url' => image_public_url($rel),
+                    'path' => $rel,
+                    'slot' => $slot,
+                    'width' => $w,
+                    'height' => $h,
+                    'adult_score' => $adult['score'],
+                    'provider' => $generated['model'] ?? 'gpt-image',
+                ];
+            }
+        } catch (Throwable $e) {
+            error_log('AI image generation failed, falling back to placeholder: ' . $e->getMessage());
+        }
+    }
+    $w = 1280;
+    $h = 720;
+    $im = imagecreatetruecolor($w, $h);
+    $bg = imagecolorallocate($im, 239, 237, 232);
+    $ink = imagecolorallocate($im, 31, 30, 29);
+    $acc = imagecolorallocate($im, 217, 119, 87);
+    imagefilledrectangle($im, 0, 0, $w, $h, $bg);
+    for ($i = 0; $i < 18; $i++) {
+        $x = ($i * 97) % $w;
+        $y = ($i * 53) % $h;
+        imagefilledrectangle($im, $x, $y, min($w, $x + 160), min($h, $y + 48), $i % 2 ? $acc : $ink);
+    }
+    imagestring($im, 5, 48, 48, 'xlog generated visual', $ink);
+    $lines = str_split(preg_replace('/\s+/u', ' ', $prompt), 54);
+    $y = 600;
+    foreach (array_slice($lines, 0, 2) as $line) {
+        imagestring($im, 4, 48, $y, $line, $ink);
+        $y += 24;
+    }
+    imagewebp($im, $out, 82);
+    if (PHP_VERSION_ID < 80500) @imagedestroy($im);
+    $adult = adult_keyword_score($prompt);
+    db_exec(
+        'INSERT INTO images (session_id, path, caption, slot, source, adult_score, adult_reason, width, height, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        [$sessionId, $rel, $prompt, $slot, 'generated', $adult['score'], $adult['reason'], $w, $h, now_iso()]
+    );
+    return [
+        'id' => (int)db()->lastInsertId(),
+        'url' => image_public_url($rel),
+        'path' => $rel,
+        'slot' => $slot,
+        'width' => $w,
+        'height' => $h,
+        'adult_score' => $adult['score'],
+    ];
+}
+
+function image_write_generated_bytes($bytes, $mime, $out) {
+    $mime = strtolower((string)$mime);
+    if ($mime === 'image/webp') {
+        if (file_put_contents($out, $bytes) === false) {
+            throw new RuntimeException('Could not save generated image');
+        }
+    } else {
+        $tmp = tempnam(sys_get_temp_dir(), 'xlog-gen-image-');
+        if ($tmp === false || file_put_contents($tmp, $bytes) === false) {
+            throw new RuntimeException('Could not save generated image temp file');
+        }
+        try {
+            if (extension_loaded('imagick')) {
+                image_with_imagick($tmp, $out);
+            } else {
+                image_with_gd($tmp, $mime, $out);
+            }
+        } finally {
+            @unlink($tmp);
+        }
+    }
+    $info = @getimagesize($out);
+    if (!$info) {
+        throw new RuntimeException('Generated image could not be decoded');
+    }
+    return [(int)$info[0], (int)$info[1]];
+}
+
+function assess_generated_image_adult($prompt, $path) {
+    $result = adult_keyword_score($prompt);
+    $score = (float)$result['score'];
+    $reason = $score >= 0.55 ? 'text:' . $result['reason'] : 'generated_image';
+    if (ai_has_key('moderation')) {
+        try {
+            $visual = ai_moderate_image($path, 'image/webp', $prompt);
+            if (is_array($visual)) {
+                $visualScore = (float)($visual['score'] ?? 0);
+                if ($visualScore >= $score) {
+                    $score = $visualScore;
+                    $reason = 'visual:' . ($visual['reason'] ?? 'moderation');
+                } elseif ($score >= 0.55) {
+                    $reason .= '; visual:' . ($visual['reason'] ?? 'moderation');
+                }
+            }
+        } catch (Throwable $e) {
+            error_log('generated image moderation failed: ' . $e->getMessage());
+        }
+    }
+    return [
+        'score' => max(0.0, min(1.0, $score)),
+        'reason' => $reason,
     ];
 }
 
@@ -101,8 +235,10 @@ function image_with_gd($src, $mime, $out) {
     imagesavealpha($dst, true);
     imagecopyresampled($dst, $im, 0, 0, 0, 0, $nw, $nh, $w, $h);
     imagewebp($dst, $out, 80);
-    imagedestroy($im);
-    imagedestroy($dst);
+    if (PHP_VERSION_ID < 80500) {
+        @imagedestroy($im);
+        @imagedestroy($dst);
+    }
     return [$nw, $nh];
 }
 
@@ -186,13 +322,14 @@ function rewrite_session_message_asset_urls($sessionId, array $mappings) {
 }
 
 function session_images_context($sessionId) {
-    $rows = db_all('SELECT path, caption, slot, width, height FROM images WHERE session_id = ? ORDER BY id ASC', [$sessionId]);
+    $rows = db_all('SELECT path, caption, slot, source, width, height FROM images WHERE session_id = ? ORDER BY id ASC', [$sessionId]);
     $out = [];
     foreach ($rows as $row) {
         $out[] = [
             'url' => image_public_url($row['path']),
             'description' => $row['caption'],
             'slot' => $row['slot'] ?? '',
+            'source' => $row['source'] ?? 'upload',
             'width' => (int)$row['width'],
             'height' => (int)$row['height'],
         ];

@@ -15,6 +15,7 @@ function diag($name, $ok, $message) {
 }
 
 echo "xlog.ink V2 config diagnostics\n";
+echo "Config: local config.php " . (is_file(XLOG_ROOT . '/config.php') ? 'present' : 'missing') . "\n";
 echo "Config: /etc/xlog/config.php " . (is_file('/etc/xlog/config.php') ? 'present' : 'missing') . "\n\n";
 
 $cfg = xlog_config();
@@ -22,9 +23,9 @@ diag('SQLite', is_writable(xlog_config('data_dir')) && db() instanceof PDO, xlog
 diag('site_dir', is_writable(xlog_config('site_dir')), xlog_config('site_dir'));
 diag('asset_dir', is_writable(xlog_config('asset_dir')), xlog_config('asset_dir'));
 
-foreach (['chat', 'gen'] as $purpose) {
+foreach (['chat', 'gen', 'image', 'moderation'] as $purpose) {
     $ai = ai_config($purpose);
-    $hasKey = !empty($ai['key']) && strpos($ai['key'], '<') === false;
+    $hasKey = !empty($ai['model']) && strpos((string)$ai['model'], '<') === false && !empty($ai['key']) && strpos((string)$ai['key'], '<') === false;
     diag("AI {$purpose} config", $hasKey, $ai['base_url'] . ' · ' . $ai['model'] . ' · ' . $ai['format']);
 }
 
@@ -56,6 +57,24 @@ if ($liveAi) {
             diag('AI gen stream', strpos($text, '<!DOCTYPE html>') !== false || trim($text) !== '', mb_substr(trim($text), 0, 80, 'UTF-8'));
         } catch (Throwable $e) {
             diag('AI gen stream', false, $e->getMessage());
+        }
+    }
+
+    if (!ai_has_key('moderation')) {
+        diag('AI visual moderation', false, 'missing moderation API key');
+    } else {
+        try {
+            $probe = tempnam(sys_get_temp_dir(), 'xlog-moderation-') . '.png';
+            $im = imagecreatetruecolor(64, 64);
+            $bg = imagecolorallocate($im, 255, 255, 255);
+            imagefill($im, 0, 0, $bg);
+            imagepng($im, $probe);
+            if (PHP_VERSION_ID < 80500) imagedestroy($im);
+            $result = ai_moderate_image($probe, 'image/png', 'diagnostic clean 64x64 pixel');
+            @unlink($probe);
+            diag('AI visual moderation', is_array($result), 'score=' . ($result['score'] ?? 'n/a') . ' reason=' . ($result['reason'] ?? 'n/a'));
+        } catch (Throwable $e) {
+            diag('AI visual moderation', false, $e->getMessage());
         }
     }
 } else {
