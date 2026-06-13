@@ -22,6 +22,7 @@ git ls-files -z \
 ssh "${SSH_ARGS[@]}" "${REMOTE}" "cd '${DEST}' \
   && mkdir -p data site site-assets data/php-sessions data/previews \
   && chown -R www:www data site site-assets \
+  && if [ -f recent.html ]; then chown www:www recent.html && chmod 664 recent.html; fi \
   && chmod 750 data data/php-sessions data/previews \
   && find data -maxdepth 1 -type f -name 'xlog.db*' -exec chmod 660 {} \\; \
   && php -l index.php \
