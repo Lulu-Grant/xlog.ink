@@ -357,6 +357,29 @@ function ai_parse_moderation_json($text) {
 }
 
 function ai_stream_openai(array $cfg, array $messages, callable $onDelta) {
+    if (array_key_exists('stream', $cfg) && !$cfg['stream']) {
+        $payload = [
+            'model' => $cfg['model'],
+            'messages' => array_map(fn($m) => ['role' => $m['role'], 'content' => $m['content']], $messages),
+            'max_tokens' => (int)$cfg['max_tokens'],
+            'stream' => false,
+        ];
+        $data = ai_curl_json(rtrim($cfg['base_url'], '/') . '/v1/chat/completions', [
+            'Authorization: Bearer ' . $cfg['key'],
+            'Content-Type: application/json',
+        ], $payload);
+        $text = $data['choices'][0]['message']['content'] ?? '';
+        if ($text === '') {
+            throw new RuntimeException('AI gateway returned empty content');
+        }
+        ai_stream_string($text, $onDelta);
+        $usage = $data['usage'] ?? [];
+        return [
+            'input_tokens' => $usage['input_tokens'] ?? ($usage['prompt_tokens'] ?? 0),
+            'output_tokens' => $usage['output_tokens'] ?? ($usage['completion_tokens'] ?? mb_strlen($text, 'UTF-8')),
+        ];
+    }
+
     $payload = [
         'model' => $cfg['model'],
         'messages' => array_map(fn($m) => ['role' => $m['role'], 'content' => $m['content']], $messages),
