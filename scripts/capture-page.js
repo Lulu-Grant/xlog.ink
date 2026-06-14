@@ -2,7 +2,13 @@
 const fs = require('fs');
 
 if (!process.env.PLAYWRIGHT_BROWSERS_PATH) {
-  process.env.PLAYWRIGHT_BROWSERS_PATH = '/opt/xlog-playwright-browsers';
+  const candidates = [
+    '/opt/xlog-playwright-browsers',
+    `${process.env.HOME || ''}/Library/Caches/ms-playwright`,
+    `${process.env.HOME || ''}/.cache/ms-playwright`
+  ];
+  const existing = candidates.find((path) => path && fs.existsSync(path));
+  if (existing) process.env.PLAYWRIGHT_BROWSERS_PATH = existing;
 }
 
 function loadPlaywright() {

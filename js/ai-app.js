@@ -246,7 +246,6 @@
         buildPreviewPlaceholder() +
         '<div class="final-preview-shot" hidden>' +
         '<img class="final-preview-image" alt="' + escapeAttr(t('previewFrameTitle')) + '" hidden>' +
-        '<iframe class="live-preview-frame" title="' + escapeAttr(t('previewFrameTitle')) + '" loading="lazy" sandbox="allow-scripts allow-same-origin" hidden></iframe>' +
         '<div class="final-preview-fallback" hidden>' +
         '<span>' + escapeHtml(t('previewWaitingTitle')) + '</span>' +
         '<small>' + escapeHtml(t('finalPreviewNote')) + '</small>' +
@@ -255,14 +254,11 @@
         '<div class="live-preview-note">' + escapeHtml(t('previewNote')) + '</div>' +
         '<div class="delivery-panel" hidden>' +
         '<div class="delivery-body">' +
-        '<div class="delivery-qr-stack">' +
-        '<canvas class="qr-canvas" width="180" height="180"></canvas>' +
+        '<div class="delivery-link-area">' +
         '<div class="url-box"></div>' +
-        '</div>' +
         '<div class="delivery-actions">' +
         '<a data-open-page="1" href="#" target="_blank" rel="noopener">' + escapeHtml(t('openPage')) + '</a>' +
         '<button type="button" data-download-page-image="1" hidden>' + escapeHtml(t('downloadPageImage')) + '</button>' +
-        '<button type="button" data-download-qr="1">' + escapeHtml(t('downloadQr')) + '</button>' +
         '<button type="button" data-copy-url="1">' + escapeHtml(t('copyLink')) + '</button>' +
         '</div>' +
         '</div>' +
@@ -292,11 +288,6 @@
       image.hidden = true;
       image.removeAttribute('src');
     }
-    var frame = card.querySelector('.live-preview-frame');
-    if (frame) {
-      frame.hidden = true;
-      frame.removeAttribute('src');
-    }
     var fallback = card.querySelector('.final-preview-fallback');
     if (fallback) fallback.hidden = true;
     var note = card.querySelector('.live-preview-note');
@@ -314,31 +305,30 @@
     card.classList.add('is-final', 'delivery-card');
     card.classList.remove('is-previewing', 'is-stopped');
     card.dataset.pageUrl = url;
+    try {
+      card.dataset.previewHost = new URL(url).hostname;
+    } catch (_) {
+      card.dataset.previewHost = url.replace(/^https?:\/\//, '').replace(/\/.*$/, '');
+    }
     if (pageImageUrl) card.dataset.pageImageUrl = pageImageUrl;
     else delete card.dataset.pageImageUrl;
     var placeholder = card.querySelector('.preview-placeholder');
     if (placeholder) placeholder.hidden = true;
     var shot = card.querySelector('.final-preview-shot');
-    if (shot) shot.hidden = false;
+    if (shot) {
+      shot.hidden = false;
+      shot.dataset.previewHost = card.dataset.previewHost || '';
+    }
     var image = card.querySelector('.final-preview-image');
-    var frame = card.querySelector('.live-preview-frame');
     var fallback = card.querySelector('.final-preview-fallback');
     if (image && pageImageUrl) {
       image.src = pageImageUrl;
       image.hidden = false;
-      if (frame) {
-        frame.hidden = true;
-        frame.removeAttribute('src');
-      }
       if (fallback) fallback.hidden = true;
     } else {
       if (image) {
         image.hidden = true;
         image.removeAttribute('src');
-      }
-      if (frame) {
-        frame.hidden = true;
-        frame.removeAttribute('src');
       }
       if (fallback) {
         fallback.hidden = false;
@@ -354,11 +344,6 @@
     if (openLink) openLink.href = url;
     var imageBtn = card.querySelector('button[data-download-page-image]');
     if (imageBtn) imageBtn.hidden = !pageImageUrl;
-    var canvas = card.querySelector('.qr-canvas');
-    if (!drawQr(canvas, url)) {
-      var downloadBtn = card.querySelector('button[data-download-qr]');
-      if (downloadBtn) downloadBtn.hidden = true;
-    }
     scrollDown(true);
   }
 
@@ -372,11 +357,6 @@
     if (image) {
       image.src = pageImageUrl;
       image.hidden = false;
-    }
-    var frame = card.querySelector('.live-preview-frame');
-    if (frame) {
-      frame.hidden = true;
-      frame.removeAttribute('src');
     }
     var fallback = card.querySelector('.final-preview-fallback');
     if (fallback) fallback.hidden = true;
@@ -635,7 +615,7 @@
     }
 
     if (data.page && data.page.url) {
-      finalizeLivePreview(data.page.url);
+      finalizeLivePreview(data.page.url, data.page.image_url || '');
       if (data.edit_mode) {
         addMessage('system', t('editModeCurrent'));
       }
@@ -1003,34 +983,6 @@
     });
   }
 
-  function drawQr(canvas, text) {
-    if (window.qrcode) {
-      var qr = window.qrcode(0, 'M');
-      qr.addData(text);
-      qr.make();
-      var count = qr.getModuleCount();
-      var ctxReal = canvas.getContext('2d');
-      var cellReal = canvas.width / count;
-      ctxReal.fillStyle = '#fff';
-      ctxReal.fillRect(0, 0, canvas.width, canvas.height);
-      ctxReal.fillStyle = '#000';
-      for (var row = 0; row < count; row++) {
-        for (var col = 0; col < count; col++) {
-          if (qr.isDark(row, col)) {
-            ctxReal.fillRect(Math.floor(col * cellReal), Math.floor(row * cellReal), Math.ceil(cellReal), Math.ceil(cellReal));
-          }
-        }
-      }
-      return true;
-    }
-    if (!canvas) return false;
-    var fallback = document.createElement('div');
-    fallback.className = 'qr-fallback';
-    fallback.textContent = t('qrFailed');
-    canvas.replaceWith(fallback);
-    return false;
-  }
-
   function escapeHtml(s) {
     return String(s).replace(/[&<>"']/g, function (c) { return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]; });
   }
@@ -1165,15 +1117,6 @@
       }).catch(function () {
         toast(t('copyFailed'));
       });
-      return;
-    }
-    if (e.target.closest('button[data-download-qr]')) {
-      var canvas = delivery.querySelector('.qr-canvas');
-      if (!canvas) return;
-      var a = document.createElement('a');
-      a.download = 'xlog-page-qr.png';
-      a.href = canvas.toDataURL('image/png');
-      a.click();
       return;
     }
     if (e.target.closest('button[data-download-page-image]')) {

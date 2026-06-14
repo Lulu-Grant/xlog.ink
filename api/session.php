@@ -1,5 +1,6 @@
 <?php
 require_once __DIR__ . '/../includes/quota.php';
+require_once __DIR__ . '/../includes/imageproc.php';
 
 require_method('POST');
 xlog_start_session();
@@ -35,7 +36,7 @@ api_json(session_response_payload($session, $greeting));
 function session_response_payload(array $session, $greeting = null) {
     $page = null;
     if (!empty($session['page_slug'])) {
-        $row = db_one('SELECT slug, title, type, lang, updated_at, created_at, email, editable, is_adult, status FROM pages WHERE slug = ?', [$session['page_slug']]);
+        $row = db_one('SELECT slug, title, type, lang, updated_at, created_at, email, editable, is_adult, status, screenshot_path, og_image_path FROM pages WHERE slug = ?', [$session['page_slug']]);
         if ($row) {
             $page = [
                 'slug' => $row['slug'],
@@ -49,13 +50,15 @@ function session_response_payload(array $session, $greeting = null) {
                 'editable' => !empty($row['editable']),
                 'is_adult' => !empty($row['is_adult']),
                 'status' => $row['status'],
+                'image_url' => !empty($row['screenshot_path']) ? image_public_url($row['screenshot_path']) : '',
+                'og_image_url' => !empty($row['og_image_path']) ? image_public_url($row['og_image_path']) : '',
             ];
         }
     }
 
     $payload = [
         'session_id' => $session['id'],
-        'messages' => session_messages($session['id']) ?: [],
+        'messages' => session_public_messages($session['id']),
         'state' => $session['state'],
         'edit_mode' => $session['edit_mode'] ?? '',
         'page' => $page,
@@ -65,4 +68,23 @@ function session_response_payload(array $session, $greeting = null) {
     ];
     if ($greeting !== null) $payload['greeting'] = $greeting;
     return $payload;
+}
+
+function session_public_messages($sessionId) {
+    $messages = session_messages($sessionId) ?: [];
+    return array_values(array_filter($messages, function ($message) {
+        $role = $message['role'] ?? 'assistant';
+        $content = (string)($message['content'] ?? '');
+        if (str_starts_with($content, '[系统事件]')) return false;
+        if ($role === 'user' && str_starts_with($content, '[当前页面信息]')) return false;
+        if ($role === 'user' && str_starts_with($content, '[目前頁面資訊]')) return false;
+        if ($role === 'user' && str_starts_with($content, '[Current page info]')) return false;
+        if ($role === 'user' && str_starts_with($content, '[图片已上传:')) return false;
+        if ($role === 'user' && str_starts_with($content, '[图片已生成:')) return false;
+        if ($role === 'user' && str_starts_with($content, '[圖片已上傳:')) return false;
+        if ($role === 'user' && str_starts_with($content, '[圖片已生成:')) return false;
+        if ($role === 'user' && str_starts_with($content, '[Image uploaded:')) return false;
+        if ($role === 'user' && str_starts_with($content, '[Image generated:')) return false;
+        return true;
+    }));
 }

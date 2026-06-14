@@ -162,10 +162,10 @@ function image_with_imagick($src, $out) {
 }
 
 function image_with_gd($src, $mime, $out) {
-    if ($mime === 'image/jpeg') $im = imagecreatefromjpeg($src);
-    elseif ($mime === 'image/png') $im = imagecreatefrompng($src);
-    elseif ($mime === 'image/webp') $im = imagecreatefromwebp($src);
-    else $im = imagecreatefromgif($src);
+    if ($mime === 'image/jpeg') $im = @imagecreatefromjpeg($src);
+    elseif ($mime === 'image/png') $im = @imagecreatefrompng($src);
+    elseif ($mime === 'image/webp') $im = @imagecreatefromwebp($src);
+    else $im = @imagecreatefromgif($src);
     if (!$im) throw new RuntimeException('Could not decode image');
     if ($mime === 'image/jpeg') {
         $im = gd_apply_exif_orientation($im, $src);
