@@ -115,17 +115,23 @@ function moderation_result_allows_publication(array $result) {
     return ($result['status'] ?? 'error') === 'ok' && empty($result['must_block']);
 }
 
-function generated_page_description($html, $title = '') {
+function extract_generated_meta_description($html) {
     $html = (string)$html;
-    $description = '';
     if (preg_match('/<meta\b(?=[^>]*\bname=["\']description["\'])(?=[^>]*\bcontent=["\']([^"\']*)["\'])[^>]*>/i', $html, $match)) {
-        $description = html_entity_decode((string)$match[1], ENT_QUOTES | ENT_HTML5, 'UTF-8');
+        return trim(html_entity_decode((string)$match[1], ENT_QUOTES | ENT_HTML5, 'UTF-8'));
     }
-    if (trim($description) === '') {
-        $visible = preg_replace('/<(script|style|template)\b[^>]*>.*?<\/\1>/is', ' ', $html);
-        $visible = html_entity_decode(strip_tags((string)$visible), ENT_QUOTES | ENT_HTML5, 'UTF-8');
-        $description = trim((string)$title . ' ' . $visible);
-    }
+    return '';
+}
+
+function generated_page_visible_description($html, $title = '') {
+    $visible = preg_replace('/<(script|style|template)\b[^>]*>.*?<\/\1>/is', ' ', (string)$html);
+    $visible = html_entity_decode(strip_tags((string)$visible), ENT_QUOTES | ENT_HTML5, 'UTF-8');
+    return excerpt_plain_text(trim((string)$title . ' ' . $visible), 160);
+}
+
+function generated_page_description($html, $title = '') {
+    $description = extract_generated_meta_description($html);
+    if ($description === '') $description = generated_page_visible_description($html, $title);
     $description = excerpt_plain_text($description, 160);
     return $description !== '' ? $description : excerpt_plain_text((string)$title, 160);
 }
