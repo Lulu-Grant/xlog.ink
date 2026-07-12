@@ -97,6 +97,7 @@ try {
     $metaHtml = '<!doctype html><html><head><title>Test</title><meta name="description" content="A concise public summary"></head><body><h1>Visible heading</h1></body></html>';
     logic_assert(generated_page_description($metaHtml, 'Test') === 'A concise public summary', 'SEO description keeps generated public summary');
     logic_assert(extract_generated_meta_description($metaHtml) === 'A concise public summary', 'SEO description extraction is stable');
+    logic_assert(generated_page_title($metaHtml) === 'Test', 'generated page title extraction is stable');
     $fallbackDescription = generated_page_description('<html><head><title>Test</title><style>body{color:red}</style></head><body><h1>Visible heading</h1><p>Visible copy</p></body></html>', 'Test');
     logic_assert(strpos($fallbackDescription, 'Visible heading') !== false, 'SEO fallback uses visible page content');
     logic_assert(strpos($fallbackDescription, '[{"role"') === false, 'SEO fallback never serializes conversation JSON');

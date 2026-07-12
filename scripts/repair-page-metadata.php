@@ -13,7 +13,7 @@ foreach (glob($siteDir . '/*.html') ?: [] as $path) {
     if (!preg_match('/[\[{]\s*["\']role["\']\s*:|&quot;role&quot;|\\"role\\"/i', $description)) continue;
 
     $matched++;
-    $title = extract_title($html) ?: 'xlog page';
+    $title = generated_page_title($html);
     $replacement = generated_page_visible_description($html, $title);
     echo basename($path) . ': ' . $replacement . PHP_EOL;
     if (!$apply) continue;

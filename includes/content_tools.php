@@ -123,6 +123,14 @@ function extract_generated_meta_description($html) {
     return '';
 }
 
+function generated_page_title($html, $fallback = 'xlog page') {
+    if (preg_match('/<title\b[^>]*>(.*?)<\/title>/is', (string)$html, $match)) {
+        $title = excerpt_plain_text(html_entity_decode(strip_tags((string)$match[1]), ENT_QUOTES | ENT_HTML5, 'UTF-8'), 120);
+        if ($title !== '') return $title;
+    }
+    return excerpt_plain_text((string)$fallback, 120);
+}
+
 function generated_page_visible_description($html, $title = '') {
     $visible = preg_replace('/<(script|style|template)\b[^>]*>.*?<\/\1>/is', ' ', (string)$html);
     $visible = html_entity_decode(strip_tags((string)$visible), ENT_QUOTES | ENT_HTML5, 'UTF-8');
