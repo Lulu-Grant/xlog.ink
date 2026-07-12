@@ -56,4 +56,6 @@ ssh "${SSH_ARGS[@]}" "${REMOTE}" "cd '${DEST}' \
   && \"\${PHP_BIN}\" -l index.php \
   && \"\${PHP_BIN}\" -l api/session.php \
   && \"\${PHP_BIN}\" -l includes/db.php \
-  && \"\${PHP_BIN}\" scripts/build-sitemap.php"
+  && \"\${PHP_BIN}\" scripts/build-sitemap.php \
+  && chown www:www sitemap.xml \
+  && chmod 664 sitemap.xml"

@@ -33,7 +33,7 @@ function build_sitemap_file() {
         . "<urlset xmlns=\"http://www.sitemaps.org/schemas/sitemap/0.9\">\n"
         . $items
         . "</urlset>\n";
-    if (file_put_contents(XLOG_ROOT . '/sitemap.xml', $xml, LOCK_EX) === false) {
+    if (@file_put_contents(XLOG_ROOT . '/sitemap.xml', $xml, LOCK_EX) === false) {
         throw new RuntimeException('Could not write sitemap.xml');
     }
     return count($urls);
