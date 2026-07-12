@@ -28,6 +28,7 @@ putenv('XLOG_CONFIG_PATH=' . $configPath);
 require_once $root . '/includes/page_edit.php';
 require_once $root . '/includes/mailer.php';
 require_once $root . '/includes/ai.php';
+require_once $root . '/includes/content_tools.php';
 
 function logic_assert($condition, $message) {
     if (!$condition) throw new RuntimeException($message);
@@ -92,6 +93,12 @@ try {
         try { ai_validate_public_image_url($unsafeUrl); } catch (Throwable $e) { $rejected = true; }
         logic_assert($rejected, 'unsafe image URL rejected: ' . $unsafeUrl);
     }
+
+    $metaHtml = '<!doctype html><html><head><title>Test</title><meta name="description" content="A concise public summary"></head><body><h1>Visible heading</h1></body></html>';
+    logic_assert(generated_page_description($metaHtml, 'Test') === 'A concise public summary', 'SEO description keeps generated public summary');
+    $fallbackDescription = generated_page_description('<html><head><title>Test</title><style>body{color:red}</style></head><body><h1>Visible heading</h1><p>Visible copy</p></body></html>', 'Test');
+    logic_assert(strpos($fallbackDescription, 'Visible heading') !== false, 'SEO fallback uses visible page content');
+    logic_assert(strpos($fallbackDescription, '[{"role"') === false, 'SEO fallback never serializes conversation JSON');
 
     echo "Logic review regression passed.\n";
 } finally {

@@ -152,7 +152,7 @@ try {
     $adultFlagCleared = $editPage && !empty($editPage['is_adult']) && !$isAdult;
     $ogImagePath = first_session_image_path($sessionId);
     $ogImageUrl = $ogImagePath ? image_public_url($ogImagePath) : '';
-    $description = excerpt_plain_text($title . ' ' . json_encode($generationMessages, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES), 150);
+    $description = generated_page_description($html, $title);
     $html = ensure_page_meta($html, [
         'title' => $title,
         'description' => $description,

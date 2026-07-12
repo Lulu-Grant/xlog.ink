@@ -115,6 +115,21 @@ function moderation_result_allows_publication(array $result) {
     return ($result['status'] ?? 'error') === 'ok' && empty($result['must_block']);
 }
 
+function generated_page_description($html, $title = '') {
+    $html = (string)$html;
+    $description = '';
+    if (preg_match('/<meta\b(?=[^>]*\bname=["\']description["\'])(?=[^>]*\bcontent=["\']([^"\']*)["\'])[^>]*>/i', $html, $match)) {
+        $description = html_entity_decode((string)$match[1], ENT_QUOTES | ENT_HTML5, 'UTF-8');
+    }
+    if (trim($description) === '') {
+        $visible = preg_replace('/<(script|style|template)\b[^>]*>.*?<\/\1>/is', ' ', $html);
+        $visible = html_entity_decode(strip_tags((string)$visible), ENT_QUOTES | ENT_HTML5, 'UTF-8');
+        $description = trim((string)$title . ' ' . $visible);
+    }
+    $description = excerpt_plain_text($description, 160);
+    return $description !== '' ? $description : excerpt_plain_text((string)$title, 160);
+}
+
 function assess_uploaded_image_adult(array $file, $caption = '', $processedPath = null, $processedMime = 'image/webp') {
     $name = (string)($file['name'] ?? '');
     return assess_adult_image_with_ai($processedPath, $processedMime, $name . "\n" . $caption);
