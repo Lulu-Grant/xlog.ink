@@ -235,14 +235,14 @@ function mutate_session_messages($sessionId, callable $mutator, $state = null) {
             $stmt->execute([$sessionId]);
             $row = $stmt->fetch(PDO::FETCH_ASSOC);
             if (!$row) {
-                if ($ownsTransaction && $pdo->inTransaction()) $pdo->rollBack();
+                if ($ownsTransaction) $pdo->exec('ROLLBACK');
                 return false;
             }
             $messages = json_decode((string)$row['messages'], true);
             if (!is_array($messages)) $messages = [];
             $updatedMessages = $mutator($messages);
             if (!is_array($updatedMessages)) {
-                if ($ownsTransaction && $pdo->inTransaction()) $pdo->rollBack();
+                if ($ownsTransaction) $pdo->exec('ROLLBACK');
                 return false;
             }
             $json = json_encode($updatedMessages, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
@@ -253,10 +253,12 @@ function mutate_session_messages($sessionId, callable $mutator, $state = null) {
                 $update = $pdo->prepare('UPDATE sessions SET messages = ?, state = ?, updated_at = ? WHERE id = ?');
                 $update->execute([$json, $state, now_iso(), $sessionId]);
             }
-            if ($ownsTransaction) $pdo->commit();
+            if ($ownsTransaction) $pdo->exec('COMMIT');
             return true;
         } catch (Throwable $e) {
-            if ($ownsTransaction && $pdo->inTransaction()) $pdo->rollBack();
+            if ($ownsTransaction) {
+                try { $pdo->exec('ROLLBACK'); } catch (Throwable $ignored) {}
+            }
             $locked = stripos($e->getMessage(), 'database is locked') !== false
                 || stripos($e->getMessage(), 'database is busy') !== false;
             if ($locked && $attempt < 4) {
