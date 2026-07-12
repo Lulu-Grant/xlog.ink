@@ -68,6 +68,8 @@ function xlog_default_config() {
                 'size' => getenv('XLOG_IMAGE_SIZE') ?: '1024x1024',
                 'quality' => getenv('XLOG_IMAGE_QUALITY') ?: 'low',
                 'output_format' => getenv('XLOG_IMAGE_OUTPUT_FORMAT') ?: 'webp',
+                'download_hosts' => [],
+                'download_max_bytes' => 20 * 1024 * 1024,
                 'max_tokens' => 0,
                 'fallbacks' => [
                     [

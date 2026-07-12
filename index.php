@@ -87,7 +87,6 @@ $allAppCopy = get_i18n()['app'];
   window.XLOG_LOCALE = <?php echo json_encode($locale, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES); ?>;
   window.XLOG_I18N = <?php echo json_encode($allAppCopy, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES); ?>;
   </script>
-  <script src="/js/qrcode.min.js?v=1.4.4"></script>
   <script src="/js/ai-app.js?v=20260614v43"></script>
 </body>
 </html>

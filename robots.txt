@@ -1,0 +1,9 @@
+User-agent: *
+Allow: /
+Disallow: /api/
+Disallow: /data/
+Disallow: /includes/
+Disallow: /prompts/
+Disallow: /scripts/
+
+Sitemap: https://xlog.ink/sitemap.xml

@@ -10,90 +10,186 @@ function assess_session_adult($sessionId, array $messages) {
         $text .= "\n" . (string)($message['content'] ?? '');
     }
     $textResult = assess_adult_text_with_ai($text);
-    $imageRows = db_all('SELECT adult_score, adult_reason FROM images WHERE session_id = ?', [$sessionId]);
-    $imageScore = 0.0;
-    $imageAdult = false;
-    $imageReasons = [];
+    $results = [$textResult];
+    $imageRows = db_all(
+        'SELECT id, path, caption, adult_score, adult_reason, moderation_status, moderation_blocked, moderation_categories, sexual_minors_score FROM images WHERE session_id = ?',
+        [$sessionId]
+    );
     foreach ($imageRows as $row) {
-        $reason = (string)($row['adult_reason'] ?? '');
-        if (!adult_image_reason_is_ai_decision($reason)) continue;
-        $score = (float)($row['adult_score'] ?? 0);
-        if ($score > $imageScore) $imageScore = $score;
-        if ($score >= 0.55) $imageAdult = true;
-        if ($score >= 0.55 && $reason !== '') $imageReasons[] = $reason;
+        $status = (string)($row['moderation_status'] ?? '');
+        if ($status === 'ok') {
+            $categories = json_decode((string)($row['moderation_categories'] ?? '[]'), true);
+            $results[] = normalize_moderation_result([
+                'status' => 'ok',
+                'score' => (float)($row['adult_score'] ?? 0),
+                'sexual_minors_score' => (float)($row['sexual_minors_score'] ?? 0),
+                'must_block' => !empty($row['moderation_blocked']),
+                'categories' => is_array($categories) ? $categories : [],
+                'reason' => (string)($row['adult_reason'] ?? ''),
+            ], 'image', 0.55);
+            continue;
+        }
+
+        $path = moderation_asset_file_path((string)($row['path'] ?? ''));
+        $result = assess_adult_image_with_ai($path, 'image/webp', (string)($row['caption'] ?? ''));
+        persist_image_moderation_result((int)$row['id'], $result);
+        $results[] = normalize_moderation_result($result, 'image', 0.55);
     }
-    $score = max((float)$textResult['score'], $imageScore);
-    $reasons = [];
-    $textAdult = (float)$textResult['score'] >= 0.85;
-    if ($textAdult) $reasons[] = 'text:' . $textResult['reason'];
-    foreach (array_slice($imageReasons, 0, 3) as $reason) $reasons[] = 'image:' . $reason;
+    return merge_moderation_results($results);
+}
+
+function moderation_asset_file_path($publicPath) {
+    $path = parse_url((string)$publicPath, PHP_URL_PATH);
+    if (!is_string($path) || strpos($path, '/site-assets/') !== 0 || strpos($path, '..') !== false) {
+        return null;
+    }
+    return rtrim((string)xlog_config('asset_dir'), '/') . '/' . substr($path, strlen('/site-assets/'));
+}
+
+function normalize_moderation_result(array $result, $source, $adultThreshold) {
+    $status = (string)($result['status'] ?? 'ok');
+    if (!in_array($status, ['ok', 'unavailable', 'error'], true)) $status = 'error';
+    $score = max(0.0, min(1.0, (float)($result['adult_score'] ?? ($result['score'] ?? 0))));
+    $minorScore = max(0.0, min(1.0, (float)($result['sexual_minors_score'] ?? 0)));
+    $categories = $result['categories'] ?? [];
+    if (!is_array($categories)) $categories = [];
     return [
-        'is_adult' => $textAdult || $imageAdult,
-        'text_adult' => $textAdult,
-        'image_adult' => $imageAdult,
+        'status' => $status,
+        'source' => (string)$source,
         'score' => $score,
-        'reason' => $reasons ? implode('; ', $reasons) : 'clean',
+        'adult_score' => $score,
+        'sexual_minors_score' => $minorScore,
+        'is_adult' => $status === 'ok' && $score >= (float)$adultThreshold,
+        'must_block' => $status === 'ok' && (!empty($result['must_block']) || $minorScore >= 0.1),
+        'categories' => array_values(array_slice($categories, 0, 12)),
+        'reason' => mb_substr(trim((string)($result['reason'] ?? 'moderation')), 0, 300, 'UTF-8'),
     ];
 }
 
-function adult_image_reason_is_ai_decision($reason) {
-    $reason = trim((string)$reason);
-    if (stripos($reason, 'visual:') !== 0) return false;
-    if (stripos($reason, 'not_configured') !== false) return false;
-    if (stripos($reason, 'error') !== false) return false;
-    if (stripos($reason, 'no_result') !== false) return false;
-    return true;
+function merge_moderation_results(array $results) {
+    $merged = [
+        'status' => 'ok',
+        'score' => 0.0,
+        'adult_score' => 0.0,
+        'sexual_minors_score' => 0.0,
+        'is_adult' => false,
+        'must_block' => false,
+        'categories' => [],
+        'reason' => 'clean',
+    ];
+    $reasons = [];
+    foreach ($results as $result) {
+        if (!is_array($result)) continue;
+        $status = (string)($result['status'] ?? 'error');
+        if ($status !== 'ok' && $merged['status'] === 'ok') $merged['status'] = $status;
+        $merged['score'] = max($merged['score'], (float)($result['score'] ?? 0));
+        $merged['adult_score'] = max($merged['adult_score'], (float)($result['adult_score'] ?? ($result['score'] ?? 0)));
+        $merged['sexual_minors_score'] = max($merged['sexual_minors_score'], (float)($result['sexual_minors_score'] ?? 0));
+        $merged['is_adult'] = $merged['is_adult'] || !empty($result['is_adult']);
+        $merged['must_block'] = $merged['must_block'] || !empty($result['must_block']);
+        $merged['categories'] = array_values(array_unique(array_merge($merged['categories'], $result['categories'] ?? [])));
+        $reason = trim((string)($result['reason'] ?? ''));
+        if ($reason !== '' && $reason !== 'clean') $reasons[] = (($result['source'] ?? 'content') . ':' . $reason);
+    }
+    if ($reasons) $merged['reason'] = implode('; ', array_slice($reasons, 0, 6));
+    return $merged;
+}
+
+function persist_image_moderation_result($imageId, array $result) {
+    $normalized = normalize_moderation_result($result, 'image', 0.55);
+    db_exec(
+        'UPDATE images SET adult_score = ?, adult_reason = ?, moderation_status = ?, moderation_blocked = ?, moderation_categories = ?, sexual_minors_score = ? WHERE id = ?',
+        [
+            $normalized['adult_score'],
+            $normalized['reason'],
+            $normalized['status'],
+            $normalized['must_block'] ? 1 : 0,
+            json_encode($normalized['categories'], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+            $normalized['sexual_minors_score'],
+            (int)$imageId,
+        ]
+    );
+}
+
+function moderation_result_allows_publication(array $result) {
+    return ($result['status'] ?? 'error') === 'ok' && empty($result['must_block']);
 }
 
 function assess_uploaded_image_adult(array $file, $caption = '', $processedPath = null, $processedMime = 'image/webp') {
     $name = (string)($file['name'] ?? '');
-    $result = assess_adult_image_with_ai($processedPath, $processedMime, $name . "\n" . $caption);
-    return [
-        'score' => (float)$result['score'],
-        'reason' => $result['reason'],
-    ];
+    return assess_adult_image_with_ai($processedPath, $processedMime, $name . "\n" . $caption);
 }
 
 function assess_adult_text_with_ai($text) {
     $text = trim((string)$text);
     if ($text === '') {
-        return ['score' => 0.0, 'reason' => 'ai_moderation:empty_text'];
+        return normalize_moderation_result([
+            'status' => 'ok',
+            'score' => 0.0,
+            'reason' => 'ai_moderation:empty_text',
+        ], 'text', 0.85);
     }
     if (!ai_has_key('moderation')) {
-        return ['score' => 0.0, 'reason' => 'ai_moderation:not_configured'];
+        if (xlog_config('ai.moderation.mock', false)) {
+            return normalize_moderation_result([
+                'status' => 'ok',
+                'score' => 0.0,
+                'reason' => 'ai_moderation:explicit_mock',
+            ], 'text', 0.85);
+        }
+        return normalize_moderation_result([
+            'status' => 'unavailable',
+            'reason' => 'ai_moderation:not_configured',
+        ], 'text', 0.85);
     }
     try {
         $result = ai_moderate_text($text);
         if (is_array($result)) {
-            return [
-                'score' => max(0.0, min(1.0, (float)($result['score'] ?? 0))),
-                'reason' => 'text:' . ($result['reason'] ?? 'ai_moderation'),
-            ];
+            return normalize_moderation_result($result, 'text', 0.85);
         }
     } catch (Throwable $e) {
         error_log('text moderation failed: ' . $e->getMessage());
-        return ['score' => 0.0, 'reason' => 'ai_moderation_error:' . mb_substr($e->getMessage(), 0, 120, 'UTF-8')];
+        return normalize_moderation_result([
+            'status' => 'error',
+            'reason' => 'ai_moderation_error:' . mb_substr($e->getMessage(), 0, 120, 'UTF-8'),
+        ], 'text', 0.85);
     }
-    return ['score' => 0.0, 'reason' => 'ai_moderation:no_result'];
+    return normalize_moderation_result([
+        'status' => 'error',
+        'reason' => 'ai_moderation:no_result',
+    ], 'text', 0.85);
 }
 
 function assess_adult_image_with_ai($path, $mime, $context = '') {
     if (!$path || !ai_has_key('moderation')) {
-        return ['score' => 0.0, 'reason' => 'ai_moderation:not_configured'];
+        if ($path && xlog_config('ai.moderation.mock', false)) {
+            return normalize_moderation_result([
+                'status' => 'ok',
+                'score' => 0.0,
+                'reason' => 'ai_moderation:explicit_mock',
+            ], 'image', 0.55);
+        }
+        return normalize_moderation_result([
+            'status' => 'unavailable',
+            'reason' => $path ? 'ai_moderation:not_configured' : 'ai_moderation:image_missing',
+        ], 'image', 0.55);
     }
     try {
         $visual = ai_moderate_image($path, $mime, $context);
         if (is_array($visual)) {
-            return [
-                'score' => max(0.0, min(1.0, (float)($visual['score'] ?? 0))),
-                'reason' => 'visual:' . ($visual['reason'] ?? 'ai_moderation'),
-            ];
+            return normalize_moderation_result($visual, 'image', 0.55);
         }
     } catch (Throwable $e) {
         error_log('image moderation failed: ' . $e->getMessage());
-        return ['score' => 0.0, 'reason' => 'ai_moderation_error:' . mb_substr($e->getMessage(), 0, 120, 'UTF-8')];
+        return normalize_moderation_result([
+            'status' => 'error',
+            'reason' => 'ai_moderation_error:' . mb_substr($e->getMessage(), 0, 120, 'UTF-8'),
+        ], 'image', 0.55);
     }
-    return ['score' => 0.0, 'reason' => 'ai_moderation:no_result'];
+    return normalize_moderation_result([
+        'status' => 'error',
+        'reason' => 'ai_moderation:no_result',
+    ], 'image', 0.55);
 }
 
 function slug_clean($value) {

@@ -4,6 +4,7 @@ require_once __DIR__ . '/../includes/content_tools.php';
 require_once __DIR__ . '/../includes/imageproc.php';
 require_once __DIR__ . '/../includes/page_edit.php';
 require_once __DIR__ . '/../includes/recent.php';
+require_once __DIR__ . '/../includes/sitemap.php';
 require_once __DIR__ . '/../includes/turnstile.php';
 
 @set_time_limit(300);
@@ -71,6 +72,25 @@ try {
         exit;
     }
 
+    $messages = session_messages($sessionId) ?: [];
+    $images = session_images_context($sessionId);
+    $generationMessages = generation_context_messages($messages);
+    $editContext = $editPage ? build_edit_page_generation_context($editPage) : null;
+    sse_event('stage', ['stage' => 'moderating']);
+    $adult = assess_session_adult($sessionId, $generationMessages);
+    if (!empty($adult['must_block'])) {
+        restore_publish_session_state($sessionId, $previousState, $generationLocked);
+        record_publish_event($sessionId, $session['page_slug'] ?: null, 'moderation', 'refused', $adult['reason']);
+        sse_event('error', ['code' => 'content_blocked', 'message' => t('api', 'contentBlocked', $locale)]);
+        exit;
+    }
+    if (($adult['status'] ?? 'error') !== 'ok') {
+        restore_publish_session_state($sessionId, $previousState, $generationLocked);
+        record_publish_event($sessionId, $session['page_slug'] ?: null, 'moderation', 'failed', $adult['reason']);
+        sse_event('error', ['code' => 'moderation_unavailable', 'message' => t('api', 'moderationUnavailable', $locale)]);
+        exit;
+    }
+
     $quotaCharge = consume_quota('generate');
     if (!$quotaCharge['ok']) {
         restore_publish_session_state($sessionId, $previousState, $generationLocked);
@@ -80,11 +100,11 @@ try {
     }
 
     sse_event('stage', ['stage' => 'generating']);
-    $messages = session_messages($sessionId) ?: [];
-    $images = session_images_context($sessionId);
-    $generationMessages = generation_context_messages($messages);
     $system = prompt_text('gen-system.txt') . "\n\n" . t('prompt', 'genLanguage', $locale);
     $context = "【图片清单 JSON】\n" . json_encode($images, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    if ($editContext) {
+        $context .= "\n\n【当前页面编辑上下文 JSON】\n" . json_encode($editContext, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    }
     $modelMessages = [
         ['role' => 'system', 'content' => $system],
         ['role' => 'user', 'content' => "下面是精简后的最新有效对话上下文 JSON，请生成最终页面。旧的已发布页面、系统事件和交付卡片已被移除；图片地址一律以图片清单 JSON 为准。\n" . json_encode($generationMessages, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) . "\n\n" . $context],
@@ -105,6 +125,22 @@ try {
 
     $html = extract_html_document($raw);
     validate_generated_html($html);
+    $htmlModeration = assess_adult_text_with_ai(html_entity_decode(strip_tags($html), ENT_QUOTES | ENT_HTML5, 'UTF-8'));
+    $adult = merge_moderation_results([$adult, $htmlModeration]);
+    if (!empty($adult['must_block'])) {
+        refund_generate_charge($quotaCharge);
+        restore_publish_session_state($sessionId, $previousState, $generationLocked);
+        record_publish_event($sessionId, $session['page_slug'] ?: null, 'moderation', 'refused', $adult['reason'], $usage);
+        sse_event('error', ['code' => 'content_blocked', 'message' => t('api', 'contentBlocked', $locale)]);
+        exit;
+    }
+    if (($adult['status'] ?? 'error') !== 'ok') {
+        refund_generate_charge($quotaCharge);
+        restore_publish_session_state($sessionId, $previousState, $generationLocked);
+        record_publish_event($sessionId, $session['page_slug'] ?: null, 'moderation', 'failed', $adult['reason'], $usage);
+        sse_event('error', ['code' => 'moderation_unavailable', 'message' => t('api', 'moderationUnavailable', $locale)]);
+        exit;
+    }
     $title = extract_title($html) ?: 'AI Page';
     $desiredSlug = trim((string)($session['desired_slug'] ?? ''));
     $slugResult = $editPage
@@ -112,7 +148,6 @@ try {
         : generate_semantic_slug($generationMessages, $title, $desiredSlug);
     $pageSlug = $slugResult['slug'];
     $html = move_session_assets_to_slug($sessionId, $pageSlug, $html);
-    $adult = assess_session_adult($sessionId, $messages);
     $isAdult = !empty($adult['is_adult']);
     $adultFlagCleared = $editPage && !empty($editPage['is_adult']) && !$isAdult;
     $ogImagePath = first_session_image_path($sessionId);
@@ -162,8 +197,9 @@ try {
     $quotaCharge = null;
     try {
         build_recent_html_file();
+        build_sitemap_file();
     } catch (Throwable $e) {
-        error_log('recent rebuild failed: ' . $e->getMessage());
+        error_log('public index rebuild failed: ' . $e->getMessage());
     }
 
     $url = 'https://' . $pageSlug . '.xlog.ink/';
@@ -172,7 +208,6 @@ try {
     sse_event('result', [
         'url' => $url,
         'slug' => $pageSlug,
-        'qr_payload' => $url,
         'is_adult' => $isAdult,
         'adult_reason' => $adult['reason'],
         'slug_source' => $slugResult['source'],
@@ -281,7 +316,7 @@ function generation_context_skip_message($content) {
     if (preg_match('/^\[(图片已上传|圖片已上傳|图片已生成|圖片已生成)/u', $content)) {
         return false;
     }
-    if (preg_match('/^\[(系统事件|系統事件|当前页面信息|目前頁面資訊)/u', $content)) {
+    if (preg_match('/^\[(系统事件|系統事件|当前页面信息|目前頁面資訊|Current page info)/u', $content)) {
         return true;
     }
     if (preg_match('/^(页面已上线|頁面已上線|最终页面已嵌入|最終頁面已嵌入|页面写入完成|頁面寫入完成)/u', $content)) {

@@ -56,6 +56,9 @@ return [
             'size' => '1024x1024',
             'quality' => 'low',
             'output_format' => 'webp',
+            // Empty allows any public HTTPS host. Prefer provider-owned hosts when known.
+            'download_hosts' => [],
+            'download_max_bytes' => 20 * 1024 * 1024,
             'max_tokens' => 0,
             'fallbacks' => [
                 [
@@ -76,6 +79,8 @@ return [
             'format' => 'openai_moderation',
             'key' => '<OPENAI_MODERATION_API_KEY>',
             'max_tokens' => 512,
+            // Tests may set this true only in an isolated environment. Production must keep false.
+            'mock' => false,
         ],
     ],
     'smtp' => [

@@ -80,6 +80,10 @@ CREATE TABLE IF NOT EXISTS images (
     source TEXT DEFAULT 'upload',
     adult_score REAL DEFAULT 0,
     adult_reason TEXT DEFAULT '',
+    moderation_status TEXT DEFAULT '',
+    moderation_blocked INTEGER NOT NULL DEFAULT 0,
+    moderation_categories TEXT DEFAULT '[]',
+    sexual_minors_score REAL DEFAULT 0,
     width INTEGER,
     height INTEGER,
     created_at TEXT NOT NULL
@@ -165,6 +169,10 @@ CREATE INDEX IF NOT EXISTS idx_admin_login_attempts_lookup ON admin_login_attemp
     db_ensure_column($pdo, 'images', 'source', "TEXT DEFAULT 'upload'");
     db_ensure_column($pdo, 'images', 'adult_score', "REAL DEFAULT 0");
     db_ensure_column($pdo, 'images', 'adult_reason', "TEXT DEFAULT ''");
+    db_ensure_column($pdo, 'images', 'moderation_status', "TEXT DEFAULT ''");
+    db_ensure_column($pdo, 'images', 'moderation_blocked', "INTEGER NOT NULL DEFAULT 0");
+    db_ensure_column($pdo, 'images', 'moderation_categories', "TEXT DEFAULT '[]'");
+    db_ensure_column($pdo, 'images', 'sexual_minors_score', "REAL DEFAULT 0");
     db_ensure_column($pdo, 'pages', 'adult_score', "REAL DEFAULT 0");
     db_ensure_column($pdo, 'pages', 'adult_reason', "TEXT DEFAULT ''");
     db_ensure_column($pdo, 'pages', 'og_image_path', "TEXT DEFAULT ''");
@@ -215,12 +223,56 @@ function save_session_messages($sessionId, array $messages, $state = null) {
     }
 }
 
+function mutate_session_messages($sessionId, callable $mutator, $state = null) {
+    $pdo = db();
+    $attempt = 0;
+    while (true) {
+        $attempt++;
+        $ownsTransaction = !$pdo->inTransaction();
+        try {
+            if ($ownsTransaction) $pdo->exec('BEGIN IMMEDIATE');
+            $stmt = $pdo->prepare('SELECT messages FROM sessions WHERE id = ?');
+            $stmt->execute([$sessionId]);
+            $row = $stmt->fetch(PDO::FETCH_ASSOC);
+            if (!$row) {
+                if ($ownsTransaction && $pdo->inTransaction()) $pdo->rollBack();
+                return false;
+            }
+            $messages = json_decode((string)$row['messages'], true);
+            if (!is_array($messages)) $messages = [];
+            $updatedMessages = $mutator($messages);
+            if (!is_array($updatedMessages)) {
+                if ($ownsTransaction && $pdo->inTransaction()) $pdo->rollBack();
+                return false;
+            }
+            $json = json_encode($updatedMessages, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+            if ($state === null) {
+                $update = $pdo->prepare('UPDATE sessions SET messages = ?, updated_at = ? WHERE id = ?');
+                $update->execute([$json, now_iso(), $sessionId]);
+            } else {
+                $update = $pdo->prepare('UPDATE sessions SET messages = ?, state = ?, updated_at = ? WHERE id = ?');
+                $update->execute([$json, $state, now_iso(), $sessionId]);
+            }
+            if ($ownsTransaction) $pdo->commit();
+            return true;
+        } catch (Throwable $e) {
+            if ($ownsTransaction && $pdo->inTransaction()) $pdo->rollBack();
+            $locked = stripos($e->getMessage(), 'database is locked') !== false
+                || stripos($e->getMessage(), 'database is busy') !== false;
+            if ($locked && $attempt < 4) {
+                usleep(25000 * $attempt);
+                continue;
+            }
+            throw $e;
+        }
+    }
+}
+
 function append_session_message($sessionId, $role, $content) {
-    $messages = session_messages($sessionId);
-    if ($messages === null) return false;
-    $messages[] = ['role' => $role, 'content' => (string)$content, 'ts' => now_iso()];
-    save_session_messages($sessionId, $messages);
-    return true;
+    return mutate_session_messages($sessionId, function (array $messages) use ($role, $content) {
+        $messages[] = ['role' => $role, 'content' => (string)$content, 'ts' => now_iso()];
+        return $messages;
+    });
 }
 
 function session_access_allowed(array $session) {

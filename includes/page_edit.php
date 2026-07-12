@@ -18,6 +18,53 @@ function clean_generated_html_for_edit($html) {
     return trim($html);
 }
 
+function clamp_generated_html_for_edit_context($html, $maxLength = 24000) {
+    $html = trim((string)$html);
+    $maxLength = max(4000, (int)$maxLength);
+    if (mb_strlen($html, 'UTF-8') <= $maxLength) return $html;
+
+    $head = '';
+    if (preg_match('/<head\b[^>]*>.*?<\/head>/is', $html, $match)) {
+        $head = mb_substr($match[0], 0, min(6000, $maxLength), 'UTF-8');
+    }
+    $body = $html;
+    if (preg_match('/<body\b[^>]*>(.*)<\/body>/is', $html, $match)) {
+        $body = $match[1];
+    }
+
+    $marker = "\n<!-- xlog: middle of current page omitted for context size -->\n";
+    $remaining = max(1000, $maxLength - mb_strlen($head, 'UTF-8') - mb_strlen($marker, 'UTF-8'));
+    $frontLength = (int)floor($remaining * 0.68);
+    $tailLength = $remaining - $frontLength;
+    return trim(
+        $head
+        . "\n<body>\n"
+        . mb_substr($body, 0, $frontLength, 'UTF-8')
+        . $marker
+        . mb_substr($body, -$tailLength, null, 'UTF-8')
+        . "\n</body>"
+    );
+}
+
+function build_edit_page_generation_context(array $page) {
+    $path = (string)($page['html_path'] ?? '');
+    if ($path === '' || !is_file($path)) {
+        throw new RuntimeException('Current page HTML is unavailable');
+    }
+    $html = file_get_contents($path);
+    if ($html === false || trim($html) === '') {
+        throw new RuntimeException('Current page HTML is unreadable');
+    }
+    return [
+        'url' => page_public_url((string)$page['slug']),
+        'slug' => (string)$page['slug'],
+        'title' => (string)($page['title'] ?? ''),
+        'type' => (string)($page['type'] ?? 'page'),
+        'lang' => normalize_locale($page['lang'] ?? '') ?: 'zh-CN',
+        'current_html' => clamp_generated_html_for_edit_context(clean_generated_html_for_edit($html)),
+    ];
+}
+
 function page_edit_seed_messages(array $page) {
     $locale = normalize_locale($page['lang'] ?? '') ?: resolve_locale();
     $html = '';

@@ -14,9 +14,10 @@ $limitKey = $email . ':' . $slug;
 if (mail_recently_sent('edit-link', $limitKey, 600)) {
     api_error('too_frequent', t('api', 'editMailResendTooFrequent', $locale), 429);
 }
-$token = bin2hex(random_bytes(32));
-$hash = hash('sha256', $token);
-db_exec('UPDATE pages SET token_hash = ?, updated_at = ? WHERE slug = ?', [$hash, now_iso(), $slug]);
-send_mail_template($email, 'edit-link', ['url' => 'https://' . $slug . '.xlog.ink/', 'edit_url' => rtrim(xlog_config('base_url'), '/') . '/edit.php?t=' . $token], normalize_locale($page['lang'] ?? '') ?: $locale);
-record_mail_event('edit-link', $limitKey);
+try {
+    send_page_edit_link($page, $email, normalize_locale($page['lang'] ?? '') ?: $locale, $limitKey);
+} catch (Throwable $e) {
+    error_log('edit link resend failed: ' . $e->getMessage());
+    api_error('mail_send_failed', t('api', 'editMailFailed', $locale), 502);
+}
 api_json(['ok' => true]);

@@ -51,9 +51,19 @@ function image_process_upload($sessionId, array $file, $caption = '', $slot = ''
     $rel = '/site-assets/tmp/' . $sessionId . '/' . $n . '.webp';
     $slot = in_array($slot, ['hero', 'avatar', 'product', 'gallery'], true) ? $slot : '';
     $adult = assess_uploaded_image_adult($file, $caption, $out, 'image/webp');
+    if (!moderation_result_allows_publication($adult)) {
+        @unlink($out);
+        $message = !empty($adult['must_block']) ? 'Image blocked by AI moderation' : 'AI image moderation is unavailable';
+        throw new RuntimeException($message);
+    }
     db_exec(
-        'INSERT INTO images (session_id, path, caption, slot, source, adult_score, adult_reason, width, height, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-        [$sessionId, $rel, $caption, $slot, 'upload', $adult['score'], $adult['reason'], $newW, $newH, now_iso()]
+        'INSERT INTO images (session_id, path, caption, slot, source, adult_score, adult_reason, moderation_status, moderation_blocked, moderation_categories, sexual_minors_score, width, height, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        [
+            $sessionId, $rel, $caption, $slot, 'upload', $adult['score'], $adult['reason'],
+            $adult['status'], $adult['must_block'] ? 1 : 0,
+            json_encode($adult['categories'], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+            $adult['sexual_minors_score'], $newW, $newH, now_iso(),
+        ]
     );
     return [
         'id' => (int)db()->lastInsertId(),
@@ -90,9 +100,19 @@ function image_create_generated_placeholder($sessionId, $prompt, $slot = 'hero')
     }
     [$w, $h] = image_write_generated_bytes($generated['bytes'], $generated['mime'], $out);
     $adult = assess_generated_image_adult($prompt, $out);
+    if (!moderation_result_allows_publication($adult)) {
+        @unlink($out);
+        $message = !empty($adult['must_block']) ? 'Image blocked by AI moderation' : 'AI image moderation is unavailable';
+        throw new RuntimeException($message);
+    }
     db_exec(
-        'INSERT INTO images (session_id, path, caption, slot, source, adult_score, adult_reason, width, height, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-        [$sessionId, $rel, $prompt, $slot, 'generated_ai', $adult['score'], $adult['reason'], $w, $h, now_iso()]
+        'INSERT INTO images (session_id, path, caption, slot, source, adult_score, adult_reason, moderation_status, moderation_blocked, moderation_categories, sexual_minors_score, width, height, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        [
+            $sessionId, $rel, $prompt, $slot, 'generated_ai', $adult['score'], $adult['reason'],
+            $adult['status'], $adult['must_block'] ? 1 : 0,
+            json_encode($adult['categories'], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+            $adult['sexual_minors_score'], $w, $h, now_iso(),
+        ]
     );
     return [
         'id' => (int)db()->lastInsertId(),
@@ -135,11 +155,7 @@ function image_write_generated_bytes($bytes, $mime, $out) {
 }
 
 function assess_generated_image_adult($prompt, $path) {
-    $result = assess_adult_image_with_ai($path, 'image/webp', $prompt);
-    return [
-        'score' => (float)$result['score'],
-        'reason' => $result['reason'],
-    ];
+    return assess_adult_image_with_ai($path, 'image/webp', $prompt);
 }
 
 function image_with_imagick($src, $out) {
@@ -249,21 +265,17 @@ function move_session_assets_to_slug($sessionId, $slug, $html) {
 }
 
 function rewrite_session_message_asset_urls($sessionId, array $mappings) {
-    $messages = session_messages($sessionId);
-    if (!is_array($messages) || !$messages) return;
-    $changed = false;
-    foreach ($messages as &$message) {
-        $content = (string)($message['content'] ?? '');
-        $updated = str_replace(array_keys($mappings), array_values($mappings), $content);
-        if ($updated !== $content) {
-            $message['content'] = $updated;
-            $changed = true;
+    mutate_session_messages($sessionId, function (array $messages) use ($mappings) {
+        foreach ($messages as &$message) {
+            $content = (string)($message['content'] ?? '');
+            $updated = str_replace(array_keys($mappings), array_values($mappings), $content);
+            if ($updated !== $content) {
+                $message['content'] = $updated;
+            }
         }
-    }
-    unset($message);
-    if ($changed) {
-        save_session_messages($sessionId, $messages);
-    }
+        unset($message);
+        return $messages;
+    });
 }
 
 function session_images_context($sessionId) {

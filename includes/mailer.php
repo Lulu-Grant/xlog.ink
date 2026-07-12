@@ -35,6 +35,41 @@ function record_mail_event($kind, $key) {
     );
 }
 
+function send_page_edit_link(array $page, $email, $locale, $limitKey) {
+    $email = normalize_email($email);
+    $slug = trim((string)($page['slug'] ?? ''));
+    if ($email === '' || $slug === '') throw new RuntimeException('Invalid edit link request');
+
+    $oldEmail = $page['email'] ?? null;
+    $oldEditable = (int)($page['editable'] ?? 0);
+    $oldHash = $page['token_hash'] ?? null;
+    $oldUpdatedAt = $page['updated_at'] ?? null;
+    $token = bin2hex(random_bytes(32));
+    $hash = hash('sha256', $token);
+    $updated = db_exec(
+        'UPDATE pages SET email = ?, editable = 1, token_hash = ?, updated_at = ? WHERE slug = ? AND token_hash IS ?',
+        [$email, $hash, now_iso(), $slug, $oldHash]
+    );
+    if ($updated->rowCount() !== 1) {
+        throw new RuntimeException('Edit token changed concurrently; retry the request');
+    }
+
+    $url = 'https://' . $slug . '.xlog.ink/';
+    $editUrl = rtrim(xlog_config('base_url'), '/') . '/edit.php?t=' . $token;
+    try {
+        send_mail_template($email, 'edit-link', ['url' => $url, 'edit_url' => $editUrl], $locale);
+    } catch (Throwable $e) {
+        db_exec(
+            'UPDATE pages SET email = ?, editable = ?, token_hash = ?, updated_at = ? WHERE slug = ? AND token_hash = ?',
+            [$oldEmail, $oldEditable, $oldHash, $oldUpdatedAt, $slug, $hash]
+        );
+        throw $e;
+    }
+
+    record_mail_event('edit-link', $limitKey);
+    return ['token' => $token, 'url' => $url, 'edit_url' => $editUrl];
+}
+
 function mail_render_template($template, array $vars, $locale = null) {
     $locale = validate_lang($locale ?: resolve_locale());
     $copy = localized_copy('mail', $locale);

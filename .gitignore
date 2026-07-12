@@ -17,6 +17,7 @@ data/ratelimit/
 data/php-sessions/
 data/previews/
 127.0.0.1.json
+sitemap.xml
 
 # Generated pages and uploaded assets
 site/*

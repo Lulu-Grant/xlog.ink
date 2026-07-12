@@ -115,8 +115,16 @@ function ai_generate_image_with_config(array $cfg, $prompt, array $options = [])
         if ($bytes === false || $bytes === '') {
             throw new RuntimeException('Image API returned invalid image data');
         }
+        $maxBytes = max(1024 * 1024, (int)($cfg['download_max_bytes'] ?? 20 * 1024 * 1024));
+        if (strlen($bytes) > $maxBytes) {
+            throw new RuntimeException('Image API returned an oversized image');
+        }
     } else {
-        [$bytes, $downloadMime] = ai_download_image_url($url);
+        [$bytes, $downloadMime] = ai_download_image_url(
+            $url,
+            $cfg['download_hosts'] ?? [],
+            (int)($cfg['download_max_bytes'] ?? 20 * 1024 * 1024)
+        );
         if ($downloadMime !== '') $mime = $downloadMime;
     }
     return [
@@ -126,33 +134,130 @@ function ai_generate_image_with_config(array $cfg, $prompt, array $options = [])
     ];
 }
 
-function ai_download_image_url($url) {
-    $url = trim((string)$url);
-    if (!preg_match('/^https:\\/\\//i', $url)) {
+function ai_download_image_url($url, array $allowedHosts = [], $maxBytes = 20971520) {
+    $maxBytes = max(1024 * 1024, min(50 * 1024 * 1024, (int)$maxBytes));
+    $currentUrl = trim((string)$url);
+    for ($redirect = 0; $redirect <= 3; $redirect++) {
+        $target = ai_validate_public_image_url($currentUrl, $allowedHosts);
+        $body = '';
+        $location = '';
+        $tooLarge = false;
+        $ch = curl_init($currentUrl);
+        $resolveIp = strpos($target['ip'], ':') !== false ? '[' . $target['ip'] . ']' : $target['ip'];
+        curl_setopt_array($ch, [
+            CURLOPT_RETURNTRANSFER => false,
+            CURLOPT_FOLLOWLOCATION => false,
+            CURLOPT_TIMEOUT => 120,
+            CURLOPT_CONNECTTIMEOUT => 20,
+            CURLOPT_LOW_SPEED_LIMIT => 1024,
+            CURLOPT_LOW_SPEED_TIME => 30,
+            CURLOPT_RESOLVE => [$target['host'] . ':' . $target['port'] . ':' . $resolveIp],
+            CURLOPT_HEADERFUNCTION => function ($curl, $header) use (&$location) {
+                if (stripos($header, 'Location:') === 0) {
+                    $location = trim(substr($header, strlen('Location:')));
+                }
+                return strlen($header);
+            },
+            CURLOPT_WRITEFUNCTION => function ($curl, $chunk) use (&$body, &$tooLarge, $maxBytes) {
+                if (strlen($body) + strlen($chunk) > $maxBytes) {
+                    $tooLarge = true;
+                    return 0;
+                }
+                $body .= $chunk;
+                return strlen($chunk);
+            },
+        ]);
+        if (defined('CURLOPT_PROTOCOLS') && defined('CURLPROTO_HTTPS')) {
+            curl_setopt($ch, CURLOPT_PROTOCOLS, CURLPROTO_HTTPS);
+        }
+        $ok = curl_exec($ch);
+        $err = curl_error($ch);
+        $status = (int)curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
+        $mime = (string)curl_getinfo($ch, CURLINFO_CONTENT_TYPE);
+        if (PHP_VERSION_ID < 80500) curl_close($ch);
+
+        if ($tooLarge) throw new RuntimeException('Generated image download exceeded size limit');
+        if ($status >= 300 && $status < 400 && $location !== '') {
+            $currentUrl = ai_resolve_redirect_url($currentUrl, $location);
+            continue;
+        }
+        if ($ok === false || $status < 200 || $status >= 300 || $body === '') {
+            throw new RuntimeException('Could not download generated image: ' . ($err ?: 'HTTP ' . $status));
+        }
+
+        $mime = strtolower(trim(explode(';', $mime)[0] ?? ''));
+        $info = @getimagesizefromstring($body);
+        $decodedMime = is_array($info) ? (string)($info['mime'] ?? '') : '';
+        if (!in_array($decodedMime, ['image/png', 'image/jpeg', 'image/webp'], true)) {
+            throw new RuntimeException('Generated image response could not be decoded');
+        }
+        if ($mime !== '' && strpos($mime, 'image/') !== 0) {
+            throw new RuntimeException('Generated image response has an invalid content type');
+        }
+        return [$body, $decodedMime];
+    }
+    throw new RuntimeException('Generated image download exceeded redirect limit');
+}
+
+function ai_validate_public_image_url($url, array $allowedHosts = []) {
+    $parts = parse_url(trim((string)$url));
+    if (!is_array($parts) || strtolower((string)($parts['scheme'] ?? '')) !== 'https') {
         throw new RuntimeException('Image API returned unsupported image URL');
     }
-    $ch = curl_init($url);
-    curl_setopt_array($ch, [
-        CURLOPT_RETURNTRANSFER => true,
-        CURLOPT_FOLLOWLOCATION => true,
-        CURLOPT_MAXREDIRS => 3,
-        CURLOPT_TIMEOUT => 120,
-        CURLOPT_CONNECTTIMEOUT => 20,
-    ]);
-    $body = curl_exec($ch);
-    $err = curl_error($ch);
-    $status = curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
-    $mime = (string)curl_getinfo($ch, CURLINFO_CONTENT_TYPE);
-    if (PHP_VERSION_ID < 80500) curl_close($ch);
-    if ($body === false || $status >= 400 || $body === '') {
-        throw new RuntimeException('Could not download generated image: ' . ($err ?: 'HTTP ' . $status));
+    $host = strtolower(rtrim((string)($parts['host'] ?? ''), '.'));
+    if ($host === '' || !ai_image_download_host_allowed($host, $allowedHosts)) {
+        throw new RuntimeException('Image API returned a disallowed image host');
     }
-    $mime = strtolower(trim(explode(';', $mime)[0] ?? ''));
-    if (!in_array($mime, ['image/png', 'image/jpeg', 'image/webp'], true)) {
-        $info = @getimagesizefromstring($body);
-        $mime = is_array($info) ? (string)($info['mime'] ?? '') : '';
+    $port = (int)($parts['port'] ?? 443);
+    if ($port !== 443) throw new RuntimeException('Image API returned a disallowed image port');
+
+    $ips = [];
+    if (filter_var($host, FILTER_VALIDATE_IP)) {
+        $ips[] = $host;
+    } else {
+        foreach (dns_get_record($host, DNS_A | DNS_AAAA) ?: [] as $record) {
+            if (!empty($record['ip'])) $ips[] = $record['ip'];
+            if (!empty($record['ipv6'])) $ips[] = $record['ipv6'];
+        }
+        if (!$ips) $ips = gethostbynamel($host) ?: [];
     }
-    return [$body, $mime];
+    $ips = array_values(array_unique($ips));
+    if (!$ips) throw new RuntimeException('Image host could not be resolved');
+    foreach ($ips as $ip) {
+        if (!filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE)) {
+            throw new RuntimeException('Image URL resolved to a non-public address');
+        }
+    }
+    return ['host' => $host, 'port' => $port, 'ip' => $ips[0]];
+}
+
+function ai_image_download_host_allowed($host, array $allowedHosts) {
+    if (!$allowedHosts) return true;
+    foreach ($allowedHosts as $allowed) {
+        $allowed = strtolower(trim((string)$allowed));
+        if ($allowed === '') continue;
+        if (strpos($allowed, '*.') === 0) {
+            $suffix = substr($allowed, 1);
+            if (substr($host, -strlen($suffix)) === $suffix) return true;
+        } elseif ($host === $allowed) {
+            return true;
+        }
+    }
+    return false;
+}
+
+function ai_resolve_redirect_url($baseUrl, $location) {
+    $location = trim((string)$location);
+    if (preg_match('/^https:\\/\\//i', $location)) return $location;
+    $base = parse_url($baseUrl);
+    if (!is_array($base) || empty($base['host'])) throw new RuntimeException('Invalid image redirect URL');
+    $origin = 'https://' . $base['host'];
+    if (!empty($base['port']) && (int)$base['port'] !== 443) $origin .= ':' . (int)$base['port'];
+    if (strpos($location, '/') === 0) return $origin . $location;
+    $path = (string)($base['path'] ?? '/');
+    $slash = strrpos($path, '/');
+    $dir = $slash === false ? '/' : substr($path, 0, $slash + 1);
+    return $origin . $dir . $location;
 }
 
 function ai_moderate_image($imagePath, $mime, $context = '') {
@@ -168,8 +273,8 @@ function ai_moderate_image($imagePath, $mime, $context = '') {
     if ($imageBytes === false) {
         throw new RuntimeException('Could not read moderation image');
     }
-    $prompt = "Assess whether this image should be treated as adult/18+ content for a public web page.\n"
-        . "Return only compact JSON with keys: adult_score (number 0-1), reason (short string).\n"
+    $prompt = "Assess whether this image should be treated as adult/18+ content for a public web page and whether it contains sexual content involving minors.\n"
+        . "Return only compact JSON with keys: adult_score (number 0-1), sexual_minors_score (number 0-1), must_block (boolean), reason (short string).\n"
         . "Score 0.55 or above means adult gate should be enabled.\n"
         . "Context/caption: " . mb_substr((string)$context, 0, 500, 'UTF-8');
 
@@ -181,7 +286,7 @@ function ai_moderate_image($imagePath, $mime, $context = '') {
         $payload = [
             'model' => $cfg['model'],
             'max_tokens' => (int)($cfg['max_tokens'] ?? 512),
-            'system' => 'You are a strict content safety classifier. Output JSON only.',
+            'system' => 'You are a strict content safety classifier. Output JSON only. Sexual content involving minors must always set must_block=true.',
             'messages' => [[
                 'role' => 'user',
                 'content' => [
@@ -212,7 +317,7 @@ function ai_moderate_image($imagePath, $mime, $context = '') {
     $payload = [
         'model' => $cfg['model'],
         'messages' => [
-            ['role' => 'system', 'content' => 'You are a strict content safety classifier. Output JSON only.'],
+            ['role' => 'system', 'content' => 'You are a strict content safety classifier. Output JSON only. Sexual content involving minors must always set must_block=true.'],
             [
                 'role' => 'user',
                 'content' => [
@@ -238,7 +343,15 @@ function ai_moderate_text($text) {
     }
     $text = mb_substr(trim((string)$text), 0, 8000, 'UTF-8');
     if ($text === '') {
-        return ['score' => 0.0, 'reason' => 'openai_moderation:empty_text'];
+        return [
+            'status' => 'ok',
+            'score' => 0.0,
+            'adult_score' => 0.0,
+            'sexual_minors_score' => 0.0,
+            'must_block' => false,
+            'categories' => [],
+            'reason' => 'openai_moderation:empty_text',
+        ];
     }
     $cfg = ai_config('moderation');
     $format = $cfg['format'] ?? 'openai';
@@ -249,11 +362,11 @@ function ai_moderate_text($text) {
         $payload = [
             'model' => $cfg['model'],
             'max_tokens' => (int)($cfg['max_tokens'] ?? 512),
-            'system' => 'You are a strict content safety classifier. Output JSON only.',
+            'system' => 'You are a strict content safety classifier. Output JSON only. Sexual content involving minors must always set must_block=true.',
             'messages' => [[
                 'role' => 'user',
                 'content' => "Assess whether this text describes or requests adult/18+ sexual content for a public web page.\n"
-                    . "Return only compact JSON with keys: adult_score (number 0-1), reason (short string).\n"
+                    . "Return only compact JSON with keys: adult_score (number 0-1), sexual_minors_score (number 0-1), must_block (boolean), reason (short string).\n"
                     . "Score 0.55 or above means adult gate should be enabled.\n\nText:\n" . $text,
             ]],
         ];
@@ -271,8 +384,8 @@ function ai_moderate_text($text) {
     $payload = [
         'model' => $cfg['model'],
         'messages' => [
-            ['role' => 'system', 'content' => 'You are a strict content safety classifier. Output JSON only.'],
-            ['role' => 'user', 'content' => "Assess whether this text describes or requests adult/18+ sexual content for a public web page. Return JSON with adult_score and reason.\n\n" . $text],
+            ['role' => 'system', 'content' => 'You are a strict content safety classifier. Output JSON only. Sexual content involving minors must always set must_block=true.'],
+            ['role' => 'user', 'content' => "Assess whether this text describes or requests adult/18+ sexual content for a public web page, and whether it contains sexual content involving minors. Return JSON with adult_score, sexual_minors_score, must_block and reason.\n\n" . $text],
         ],
         'max_tokens' => (int)($cfg['max_tokens'] ?? 512),
         'stream' => false,
@@ -327,7 +440,7 @@ function ai_openai_moderation_result(array $result) {
     $categories = $result['categories'] ?? [];
     $sexual = (float)($scores['sexual'] ?? 0);
     $sexualMinors = (float)($scores['sexual/minors'] ?? 0);
-    $score = max($sexual, $sexualMinors);
+    $score = $sexual;
     $flagged = !empty($result['flagged']);
     $active = [];
     foreach ($categories as $name => $enabled) {
@@ -338,7 +451,12 @@ function ai_openai_moderation_result(array $result) {
         if ($sexualMinors > 0) $active[] = 'sexual_minors_score=' . round($sexualMinors, 4);
     }
     return [
+        'status' => 'ok',
         'score' => max(0.0, min(1.0, $score)),
+        'adult_score' => max(0.0, min(1.0, $sexual)),
+        'sexual_minors_score' => max(0.0, min(1.0, $sexualMinors)),
+        'must_block' => !empty($categories['sexual/minors']) || $sexualMinors >= 0.1,
+        'categories' => array_values(array_slice($active, 0, 12)),
         'reason' => $flagged || $active ? ('openai_moderation:' . implode(',', array_slice($active, 0, 6))) : 'openai_moderation:clean',
     ];
 }
@@ -421,9 +539,17 @@ function ai_parse_moderation_json($text) {
         throw new RuntimeException('Moderation model did not return JSON');
     }
     $score = (float)($json['adult_score'] ?? ($json['score'] ?? 0));
+    $sexualMinorsScore = (float)($json['sexual_minors_score'] ?? 0);
     $reason = trim((string)($json['reason'] ?? 'visual_moderation'));
+    $categories = $json['categories'] ?? [];
+    if (!is_array($categories)) $categories = [];
     return [
+        'status' => 'ok',
         'score' => max(0.0, min(1.0, $score)),
+        'adult_score' => max(0.0, min(1.0, $score)),
+        'sexual_minors_score' => max(0.0, min(1.0, $sexualMinorsScore)),
+        'must_block' => !empty($json['must_block']) || $sexualMinorsScore >= 0.1,
+        'categories' => array_values(array_slice($categories, 0, 12)),
         'reason' => $reason !== '' ? mb_substr($reason, 0, 240, 'UTF-8') : 'visual_moderation',
     ];
 }

@@ -53,8 +53,8 @@
    ┌─────────────────────────────┐
    │ 🎉 你的页面已上线              │
    │ https://k3x8a92mf1.xlog.ink  │
-   │ [复制链接]  [下载二维码]       │
-   │ ▣ 二维码预览（前端本地生成）    │
+   │ [打开页面]  [复制链接]         │
+   │ ▣ 页面截图缩略图               │
    └─────────────────────────────┘
    │
    ▼
@@ -208,7 +208,6 @@ Nginx 通配符 *.xlog.ink → slug 映射（沿用现有机制）
    mailer.php           PHPMailer 封装
    imageproc.php        webp 流水线
    helpers.php          （沿用）
-   ratelimit.php        （沿用，作为 IP 兜底层）
    turnstile.php        （沿用）
    i18n.php             （沿用）
    response.php         （沿用）
@@ -382,7 +381,8 @@ POST /api/publish.php
      event: stage   data: {"stage": "generating" | "writing" | "done"}
      event: delta   data: {"text": "..."}        （可选：转发生成进度片段做动效）
      event: result  data: { "url": "https://{slug}.xlog.ink/",
-                            "slug": "...", "qr_payload": "..." }
+                            "slug": "...", "image_url": "..." }
+     event: preview_image data: { "slug": "...", "image_url": "..." }
      event: error   data: {"code": "...", ...}
 
 流程：
@@ -531,7 +531,7 @@ add_header Content-Security-Policy "default-src 'none'; style-src 'unsafe-inline
 
 安全模型：每个生成页在独立子域，与主站及其他页面 cookie 隔离；CSP 阻断外联与表单提交，AI 生成的内联 script 只能做本页动效，无法外传数据。
 
-二维码：纯前端实现（qrcode 生成库本地打包进 assets，不走 CDN），对 `https://{slug}.xlog.ink/` 生成，canvas 转 PNG 下载。
+页面截图：发布结果先返回 URL，后置截图成功后通过 `preview_image` 更新交付卡缩略图；截图失败不影响页面发布。
 
 ---
 
@@ -552,7 +552,7 @@ function consume_quota(string $kind /* generate|chat_turn */): array
 
 积分预留：`consume_quota` 内部留一个分支桩 —— `if (CREDIT_MODE) { ... 扣 credits 并写 credit_transactions ... }`，当前恒为 false。
 
-现有 `includes/ratelimit.php` 保留作为更底层的瞬时频率兜底（防脚本爆刷），与每日额度互补。
+瞬时和每日限流统一由 SQLite `quota_counters`、验证码 IP 限制、访问统计分钟限制及后台登录锁定实现，不保留未接入业务链路的文件型限流器。
 
 ---
 
@@ -608,7 +608,7 @@ function consume_quota(string $kind /* generate|chat_turn */): array
 | **M1 地基** | 配置外置；SQLite 建表 + db.php；ai.php 适配层；**实测 api.3s3.org 上 gemma 与 sonnet 的端点格式与流式行为**；migrate-jsonl 脚本 | CLI 脚本能分别流式调通两个模型；旧数据进库 |
 | **M2 聊天** | 聊天 SPA（消息流、预置卡片、SSE 渲染）；session.php / chat.php；chat-system.txt 调教；`ACTION` 动作标记；轮次限制 | 浏览器内与 gemma 完整对话，按钮按协议出现 |
 | **M3 图片** | upload.php + imageproc.php；前端上传组件 + 说明输入；上下文注入；tmp 清理 cron | 上传任意 jpg/png 得到合规 webp URL，AI 能在对话中引用 |
-| **M4 生成交付** | publish.php 全流水线；gen-system.txt；HTML 校验链；落盘 + 资产迁移；交付卡片（复制 + 本地二维码） | 端到端：对话 → 生成 → 子域可访问 → 二维码可下载 |
+| **M4 生成交付** | publish.php 全流水线；gen-system.txt；HTML 校验链；落盘 + 资产迁移；交付卡片（截图预览 + 打开 + 复制） | 端到端：对话 → 生成 → 子域可访问 → 截图预览可显示 |
 | **M5 用户体系** | 验证码登录全链路；quota.php 三级额度；AI 身份/额度注入与引导话术；me 接口与前端登录态 | 游客 10/天、用户 50/天准确执行；额度耗尽时 AI 正确引导 |
 | **M6 修改回路** | page-email.php；mailer.php；edit.php；edit 模式会话与覆盖发布 | 留邮箱 → 收到邮件 → 链接进入 → 对话修改 → 原 URL 内容更新 |
 | **M7 收尾** | CSP 上线；adult 流程接回；recent 页适配新库；成本报表 SQL；积分桩自检；压测与上线 checklist | 全安全清单逐项核对通过 |
@@ -635,5 +635,5 @@ function consume_quota(string $kind /* generate|chat_turn */): array
 | edit token | 永久有效，绑定单页，只存哈希 |
 | 新入口 | 聊天界面直接作为新首页；旧 creat 系列下线 |
 | 数据库 | SQLite，jsonl 一次性迁移 |
-| 二维码 | 前端本地生成，不依赖外部服务 |
+| 交付预览 | 发布后生成页面截图，失败不影响 URL 交付 |
 | 图片 URL | 主域绝对路径 `https://xlog.ink/site-assets/{slug}/` |
