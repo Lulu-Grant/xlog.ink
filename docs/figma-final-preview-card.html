@@ -1,0 +1,233 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>xlog final preview card</title>
+  <script src="https://mcp.figma.com/mcp/html-to-design/capture.js" async></script>
+  <style>
+    :root {
+      --bg: #f2eee6;
+      --panel: #f6f1e8;
+      --ink: #1c1b18;
+      --muted: #7b746b;
+      --line: #cfc6b8;
+      --line-strong: #2b2925;
+      --acc: #df7656;
+      --acc-deep: #bd6044;
+      --grid-line: rgba(112, 104, 94, .16);
+      --bw: 1.5px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      padding: 56px;
+      background:
+        linear-gradient(var(--grid-line) 1px, transparent 1px),
+        linear-gradient(90deg, var(--grid-line) 1px, transparent 1px),
+        var(--bg);
+      background-size: 28px 28px;
+      color: var(--ink);
+    }
+    .wrap {
+      width: 580px;
+    }
+    .card {
+      border: var(--bw) solid var(--line-strong);
+      background: transparent;
+      display: block;
+    }
+    .head {
+      min-height: 46px;
+      padding: 12px 14px;
+      border-bottom: var(--bw) solid var(--line-strong);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 20px;
+    }
+    .head strong {
+      font-size: 13px;
+      font-weight: 700;
+    }
+    .head strong::before { content: "■  ┌ "; color: var(--line-strong); }
+    .head strong::after { content: " ┐"; color: var(--muted); }
+    .status {
+      color: var(--muted);
+      font-size: 12px;
+    }
+    .shot {
+      border-bottom: var(--bw) solid var(--line-strong);
+      background:
+        linear-gradient(var(--grid-line) 1px, transparent 1px),
+        linear-gradient(90deg, var(--grid-line) 1px, transparent 1px),
+        transparent;
+      background-size: 24px 24px;
+      padding: 30px;
+    }
+    .page-thumb {
+      width: 100%;
+      height: 248px;
+      border: var(--bw) solid var(--line-strong);
+      background: #fbf8f1;
+      overflow: hidden;
+      display: grid;
+      grid-template-rows: 32px 1fr;
+      box-shadow: 10px 10px 0 rgba(28,27,24,.08);
+    }
+    .browser {
+      border-bottom: var(--bw) solid var(--line-strong);
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      padding: 0 10px;
+      color: var(--acc);
+      font-size: 9px;
+    }
+    .dot {
+      width: 6px;
+      height: 6px;
+      border: 1px solid var(--acc);
+      border-radius: 50%;
+    }
+    .site {
+      display: grid;
+      grid-template-columns: 140px 1fr;
+      gap: 18px;
+      padding: 22px;
+      align-items: center;
+    }
+    .hero-img {
+      height: 150px;
+      border: var(--bw) solid var(--line);
+      background:
+        radial-gradient(circle at 68% 24%, rgba(223,118,86,.85) 0 12%, transparent 13%),
+        linear-gradient(135deg, #efe6d8, #d9d9c9 56%, #f2d0b9);
+    }
+    .line {
+      height: 10px;
+      margin: 12px 0;
+      background: var(--ink);
+      opacity: .9;
+    }
+    .line.w1 { width: 92%; height: 20px; }
+    .line.w2 { width: 74%; }
+    .line.w3 { width: 48%; }
+    .mini-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+      margin-top: 18px;
+    }
+    .mini {
+      height: 42px;
+      border: var(--bw) solid var(--line);
+      background: rgba(223,118,86,.08);
+    }
+    .note {
+      padding: 12px 14px 4px;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.6;
+    }
+    .panel {
+      padding: 14px 18px 18px;
+    }
+    .body {
+      display: grid;
+      grid-template-columns: 180px minmax(0, 1fr);
+      gap: 18px;
+      align-items: start;
+    }
+    .qr-stack {
+      display: grid;
+      justify-items: center;
+      gap: 12px;
+    }
+    .qr {
+      width: 122px;
+      height: 122px;
+      border: var(--bw) solid var(--line-strong);
+      background:
+        linear-gradient(90deg, var(--ink) 10px, transparent 10px) 0 0 / 23px 23px,
+        linear-gradient(var(--ink) 10px, transparent 10px) 0 0 / 23px 23px,
+        #fff;
+      image-rendering: pixelated;
+    }
+    .url {
+      color: var(--acc-deep);
+      font-weight: 700;
+      font-size: 13px;
+      line-height: 1.2;
+      text-align: center;
+      overflow-wrap: anywhere;
+    }
+    .actions {
+      display: grid;
+      gap: 10px;
+    }
+    .btn {
+      min-height: 36px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      border: var(--bw) solid var(--line-strong);
+      background: transparent;
+      color: var(--ink);
+      padding: 0 12px;
+      font-size: 12.5px;
+      font-weight: 600;
+    }
+    .btn::before { content: "[ "; }
+    .btn::after { content: " ]"; }
+    .btn.primary {
+      background: var(--acc);
+      border-color: var(--acc);
+      color: var(--panel);
+    }
+  </style>
+</head>
+<body>
+  <main class="wrap">
+    <section class="card">
+      <div class="head">
+        <strong>页面构建流</strong>
+        <span class="status">页面已上线</span>
+      </div>
+      <div class="shot">
+        <div class="page-thumb" aria-label="最终页面缩略图">
+          <div class="browser"><span class="dot"></span><span class="dot"></span><span class="dot"></span><span>coffee-friday.xlog.ink</span></div>
+          <div class="site">
+            <div class="hero-img"></div>
+            <div>
+              <div class="line w1"></div>
+              <div class="line w2"></div>
+              <div class="line w3"></div>
+              <div class="mini-grid"><i class="mini"></i><i class="mini"></i><i class="mini"></i></div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <p class="note">最终页面已嵌入到对话中。你也可以复制链接、下载二维码或新窗口打开。</p>
+      <div class="panel">
+        <div class="body">
+          <div class="qr-stack">
+            <div class="qr" aria-hidden="true"></div>
+            <div class="url">https://coffee-friday.xlog.ink/</div>
+          </div>
+          <div class="actions">
+            <div class="btn primary">打开页面</div>
+            <div class="btn">下载页面图片</div>
+            <div class="btn">下载二维码</div>
+            <div class="btn">复制链接</div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+</body>
+</html>

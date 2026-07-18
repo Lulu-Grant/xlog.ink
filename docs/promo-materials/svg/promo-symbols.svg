@@ -1,0 +1,76 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="900" viewBox="0 0 1200 900" fill="none">
+  <defs>
+    <style>
+      .ink{stroke:#1e1c19;stroke-width:3;stroke-linecap:square;stroke-linejoin:miter}
+      .thin{stroke:#1e1c19;stroke-width:2;stroke-linecap:square;stroke-linejoin:miter}
+      .accent{stroke:#df7656;fill:#df7656}
+      .paper{fill:#f3efe7}
+      .muted{fill:#d9d1c5}
+      .none{fill:none}
+      .txt{font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace;font-size:28px;font-weight:700;fill:#1e1c19}
+      .small{font-size:18px;font-weight:600}
+    </style>
+  </defs>
+
+  <g id="flow-generate" transform="translate(60 70)">
+    <rect class="paper ink" width="1080" height="180"/>
+    <rect class="accent" x="28" y="28" width="18" height="18"/>
+    <text class="txt" x="60" y="48">xlog.ink / flow</text>
+    <g transform="translate(70 92)">
+      <rect class="none thin" width="190" height="54"/>
+      <text class="txt small" x="28" y="35">聊天描述</text>
+    </g>
+    <path class="thin" d="M285 119h70m-18-18 18 18-18 18"/>
+    <g transform="translate(380 92)">
+      <rect class="none thin" width="190" height="54"/>
+      <text class="txt small" x="28" y="35">AI 生成</text>
+    </g>
+    <path class="thin" d="M595 119h70m-18-18 18 18-18 18"/>
+    <g transform="translate(690 92)">
+      <rect class="none thin" width="190" height="54"/>
+      <text class="txt small" x="28" y="35">链接 QR</text>
+    </g>
+  </g>
+
+  <g id="phone-scan" transform="translate(90 330)">
+    <rect class="paper ink" width="260" height="420" rx="26"/>
+    <rect class="none thin" x="26" y="54" width="208" height="292"/>
+    <rect class="accent" x="58" y="84" width="68" height="68"/>
+    <rect class="none thin" x="146" y="84" width="54" height="12"/>
+    <rect class="none thin" x="146" y="112" width="70" height="12"/>
+    <rect class="none thin" x="58" y="180" width="158" height="92"/>
+    <circle class="accent" cx="130" cy="380" r="10"/>
+  </g>
+
+  <g id="qr-frame" transform="translate(460 340)">
+    <rect class="paper ink" width="280" height="280"/>
+    <rect fill="#1e1c19" x="36" y="36" width="54" height="54"/>
+    <rect fill="#f3efe7" x="50" y="50" width="26" height="26"/>
+    <rect fill="#1e1c19" x="190" y="36" width="54" height="54"/>
+    <rect fill="#f3efe7" x="204" y="50" width="26" height="26"/>
+    <rect fill="#1e1c19" x="36" y="190" width="54" height="54"/>
+    <rect fill="#f3efe7" x="50" y="204" width="26" height="26"/>
+    <path class="accent" d="M118 42h28v28h-28zM110 110h32v20h-32zM156 126h20v38h-20zM200 120h22v22h-22zM106 178h34v34h-34zM168 188h54v18h-54zM226 226h18v18h-18z"/>
+  </g>
+
+  <g id="seo-card" transform="translate(820 360)">
+    <rect class="paper ink" width="300" height="180"/>
+    <rect class="accent" x="24" y="24" width="18" height="18"/>
+    <rect class="none thin" x="56" y="26" width="170" height="14"/>
+    <rect class="none thin" x="24" y="68" width="240" height="16"/>
+    <rect class="none thin" x="24" y="102" width="190" height="12"/>
+    <rect class="none thin" x="24" y="130" width="220" height="12"/>
+  </g>
+
+  <g id="page-type-icons" transform="translate(150 790)">
+    <text class="txt small" x="0" y="0">名片</text>
+    <rect class="accent" x="92" y="-22" width="22" height="22"/>
+    <text class="txt small" x="150" y="0">文章</text>
+    <rect class="none thin" x="242" y="-28" width="26" height="32"/>
+    <text class="txt small" x="300" y="0">活动</text>
+    <rect class="none thin" x="392" y="-28" width="34" height="28"/>
+    <path class="thin" d="M392-18h34"/>
+    <text class="txt small" x="470" y="0">宣传</text>
+    <path class="accent" d="M566-26h26l-8 34h-26z"/>
+  </g>
+</svg>

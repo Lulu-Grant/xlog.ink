@@ -1,0 +1,215 @@
+{
+  "brand": "xlog.ink",
+  "pages": [
+    {
+      "id": "01-coffee-anniversary",
+      "nav": "小店活动",
+      "title": "一句话生成咖啡店周五福利页",
+      "subtitle": "把“呆会咖啡每周五免费喝冰美式”变成可扫码打开的活动网页，包含福利、城市、参与方式和门店氛围。",
+      "kicker": "COFFEE FRIDAY PAGE",
+      "prompt": "帮我做一个咖啡店活动页，店名叫呆会咖啡，青岛市，每周五免费喝冰美式，到店即可参加，风格轻松有记忆点。",
+      "url": "https://daihui-friday.xlog.ink/",
+      "atmosphere": "coffee-anniversary-hero.webp",
+      "mockup": "01-coffee-anniversary.png",
+      "primaryCta": "生成我的活动页",
+      "secondaryCta": "查看小店案例",
+      "storyTitle": "让每周固定福利变成可反复转发的入口",
+      "story": "适合咖啡店、餐饮店、工作室做短期或周期性活动宣传。把活动规则、城市、福利和参与方式统一到一个页面，发群、发朋友圈、贴二维码都能用同一个入口。",
+      "features": [
+        ["活动结构", "AI 自动整理标题、福利、城市、时间和参与方式。"],
+        ["扫码传播", "二维码可以放在吧台、海报、菜单和朋友圈配图里。"],
+        ["页面资产", "一次生成独立链接，活动期间反复转发。"]
+      ],
+      "keywords": ["咖啡店活动页", "周五福利宣传页", "小店活动二维码", "AI 活动页生成"]
+    },
+    {
+      "id": "02-qr-service",
+      "nav": "二维码服务页",
+      "title": "把服务介绍变成一个二维码页面",
+      "subtitle": "客户扫码后一页看懂你是谁、做什么、价格范围和如何预约。",
+      "kicker": "SCAN TO SERVICE",
+      "prompt": "帮我做一个摄影服务介绍页，包含作品风格、预约方式、价格说明和联系方式。",
+      "url": "https://photo-service.xlog.ink/",
+      "atmosphere": null,
+      "mockup": "02-qr-service.png",
+      "primaryCta": "生成二维码服务页",
+      "secondaryCta": "复制服务模板",
+      "storyTitle": "把复杂介绍压缩成一个扫码入口",
+      "story": "适合摄影、咨询、课程、维修、本地服务。用户不需要翻聊天记录，也不用你反复解释，扫一下就能看到完整服务页。",
+      "features": [
+        ["服务清单", "把项目、价格、案例和咨询方式分区展示。"],
+        ["离线可用", "名片、门店立牌、宣传单都可以放二维码。"],
+        ["更好成交", "客户扫码后直接看到下一步行动。"]
+      ],
+      "keywords": ["二维码服务页", "扫码介绍页", "AI 服务宣传页", "服务预约页面"]
+    },
+    {
+      "id": "03-event-notice",
+      "nav": "活动通知",
+      "title": "活动通知别只发群消息",
+      "subtitle": "读书会、沙龙、课程、聚会、展览，都可以整理成一个反复转发的页面。",
+      "kicker": "EVENT NOTICE",
+      "prompt": "做一个周末读书会活动页，时间周六下午，地点深圳南山，免费参加，需要提前报名。",
+      "url": "https://reading-salon.xlog.ink/",
+      "atmosphere": "weekend-reading-salon.webp",
+      "mockup": "03-event-notice.png",
+      "primaryCta": "生成活动通知页",
+      "secondaryCta": "查看活动结构",
+      "storyTitle": "一个页面，让活动信息稳定存在",
+      "story": "群公告会被刷走，海报不方便改。活动页面可以清楚放时间、地点、流程、报名方式和注意事项，后续转发只需要一个链接。",
+      "features": [
+        ["清晰", "时间、地点、流程、报名方式一次说清。"],
+        ["可靠", "信息不被聊天记录淹没，后续查找更方便。"],
+        ["轻量", "不用公众号，不用复杂表单，直接生成页面。"]
+      ],
+      "keywords": ["活动通知页面", "读书会活动页", "活动报名链接", "线下活动宣传页"]
+    },
+    {
+      "id": "04-personal-intro",
+      "nav": "个人介绍",
+      "title": "30 秒生成一个个人介绍页",
+      "subtitle": "把简介、联系方式、作品入口整理成一个轻量主页，用于社群介绍、简历补充和名片二维码。",
+      "kicker": "PERSONAL PAGE",
+      "prompt": "帮我做一个个人名片页，我是独立设计师，擅长品牌视觉和网页设计，放微信和邮箱。",
+      "url": "https://designer-card.xlog.ink/",
+      "atmosphere": "personal-brand-workdesk.webp",
+      "mockup": "04-personal-intro.png",
+      "primaryCta": "生成个人介绍页",
+      "secondaryCta": "查看名片结构",
+      "storyTitle": "让第一次见到你的人快速理解你",
+      "story": "不是所有人都需要完整官网。个人介绍页适合放定位、服务、作品链接、社交账号和联系方式，足够轻、足够清楚。",
+      "features": [
+        ["一句话定位", "打开页面先知道你是谁、能做什么。"],
+        ["链接聚合", "作品集、社交账号、邮箱、微信统一整理。"],
+        ["场景灵活", "社群介绍、简历、名片二维码都能使用。"]
+      ],
+      "keywords": ["AI 个人主页", "个人名片页面", "设计师介绍页", "轻量个人网站"]
+    },
+    {
+      "id": "05-shop-promo",
+      "nav": "小店宣传",
+      "title": "给小店做宣传页，不用设计师",
+      "subtitle": "服务项目、门店图片、地址和预约方式一次整理，适合本地店铺和个人工作室。",
+      "kicker": "LOCAL SHOP PROMO",
+      "prompt": "帮我做一个美甲工作室宣传页，风格高级温柔，展示服务项目、地址、预约微信。",
+      "url": "https://studio-booking.xlog.ink/",
+      "atmosphere": "studio-shop-promo.webp",
+      "mockup": "05-shop-promo.png",
+      "primaryCta": "生成小店宣传页",
+      "secondaryCta": "查看预约页面",
+      "storyTitle": "让小店拥有一个能反复传播的介绍页",
+      "story": "适合美甲、摄影、咖啡、课程、工作室、私域卖货。用几句话描述店铺，上传门店图或作品图，就能得到可分享页面。",
+      "features": [
+        ["无需设计", "几句话描述店铺和服务即可开始。"],
+        ["可放图片", "门头、作品、Logo、菜单都能成为页面素材。"],
+        ["可分享", "朋友圈、店内海报、客户私聊都能使用。"]
+      ],
+      "keywords": ["小店宣传页", "门店介绍页面", "工作室预约页", "AI 宣传页生成"]
+    },
+    {
+      "id": "06-ai-publish-flow",
+      "nav": "AI 发布",
+      "title": "AI 不只写文案，还能直接发布网页",
+      "subtitle": "聊天整理需求，生成 HTML，发布二级域名，拿到二维码和页面截图。",
+      "kicker": "AI WEB PUBLISH",
+      "prompt": "我想做一个宣传页面，帮我整理需求，生成页面，并给我可以分享的链接和二维码。",
+      "url": "https://your-page.xlog.ink/",
+      "atmosphere": null,
+      "mockup": "06-ai-publish-flow.png",
+      "primaryCta": "开始用 AI 发布网页",
+      "secondaryCta": "查看完整流程",
+      "storyTitle": "交付物不是一段文案，而是一个页面",
+      "story": "xlog.ink 的重点不是帮你写一段介绍，而是把介绍变成可打开、可扫码、可传播的网页。适合所有没有时间搭建网站的人。",
+      "features": [
+        ["聊天输入", "告诉 AI 你要做什么，不需要懂设计和代码。"],
+        ["自动生成", "生成完整单页网页，并完成安全校验。"],
+        ["直接发布", "拿到链接、二维码、截图，立刻可传播。"]
+      ],
+      "keywords": ["AI 自动发布网页", "AI 页面生成器", "无需代码建站", "聊天生成网页"]
+    },
+    {
+      "id": "07-activity-link",
+      "nav": "活动链接",
+      "title": "一个链接讲清楚你的活动",
+      "subtitle": "活动介绍、嘉宾、流程、地址和联系方式，变成一个能反复转发的链接。",
+      "kicker": "ONE LINK EVENT",
+      "prompt": "帮我做一个音乐沙龙活动页，包含活动介绍、嘉宾、流程、地址和联系方式。",
+      "url": "https://music-salon.xlog.ink/",
+      "atmosphere": "music-salon-evening.webp",
+      "mockup": "07-activity-link.png",
+      "primaryCta": "生成活动链接页",
+      "secondaryCta": "查看链接样式",
+      "storyTitle": "适合需要持续传播的活动",
+      "story": "比群公告更完整，比长图更灵活。活动链接页适合沙龙、课程、展览、小型演出和临时聚会。",
+      "features": [
+        ["活动页", "适合沙龙、课程、展览和线下聚会。"],
+        ["结构化", "AI 自动补齐流程、亮点和行动入口。"],
+        ["转发", "一个链接可以反复使用，二维码也能下载。"]
+      ],
+      "keywords": ["活动链接生成", "音乐沙龙页面", "课程活动页", "报名说明页面"]
+    },
+    {
+      "id": "08-logo-brand",
+      "nav": "Logo 品牌页",
+      "title": "上传一张 Logo，生成完整品牌页面",
+      "subtitle": "让品牌视觉进入页面，而不是只生成文字。适合品牌介绍、服务展示和项目启动页。",
+      "kicker": "LOGO TO BRAND PAGE",
+      "prompt": "这是我们的 logo，帮我做一个品牌介绍页，风格简洁专业，包含服务介绍和联系方式。",
+      "url": "https://brand-page.xlog.ink/",
+      "atmosphere": "brand-visual-system.webp",
+      "mockup": "08-logo-brand.png",
+      "primaryCta": "上传 Logo 生成页面",
+      "secondaryCta": "查看品牌页结构",
+      "storyTitle": "图片不只是附件，而是生成依据",
+      "story": "上传 Logo、产品图、门店图后，AI 会把它们作为页面视觉素材来组织，而不是只写一段普通介绍。",
+      "features": [
+        ["图片参与", "Logo 进入 Hero、品牌区域和视觉系统。"],
+        ["语气统一", "专业、简洁、可信赖，适合对外展示。"],
+        ["完整交付", "品牌页、二维码、截图和编辑入口一次给出。"]
+      ],
+      "keywords": ["Logo 生成品牌页", "品牌介绍页面", "AI 品牌页", "上传图片生成网页"]
+    },
+    {
+      "id": "09-social-promo",
+      "nav": "朋友圈宣传",
+      "title": "朋友圈里放不下的内容，放进一个网页",
+      "subtitle": "课程、服务、活动、小店介绍，都可以配链接和二维码，让社交传播更完整。",
+      "kicker": "SOCIAL SHARE",
+      "prompt": "帮我做一个朋友圈宣传页，介绍我的课程，适合宝妈和自由职业者，留下微信咨询。",
+      "url": "https://course-share.xlog.ink/",
+      "atmosphere": "social-share-background.webp",
+      "mockup": "09-social-promo.png",
+      "primaryCta": "生成朋友圈宣传页",
+      "secondaryCta": "查看社交传播方式",
+      "storyTitle": "短文案负责吸引，网页负责讲完整",
+      "story": "朋友圈正文只需要一句话和一个链接。页面里承载长内容、课程介绍、适合人群、案例、二维码和咨询方式。",
+      "features": [
+        ["更完整", "页面承载长内容，不受朋友圈字数和排版限制。"],
+        ["更好转发", "链接和二维码都能用，适合多平台传播。"],
+        ["更像资产", "内容长期可访问，不会被信息流淹没。"]
+      ],
+      "keywords": ["朋友圈宣传页", "课程宣传页面", "社交分享网页", "私域转化页面"]
+    },
+    {
+      "id": "10-use-case-overview",
+      "nav": "场景总览",
+      "title": "名片、活动、文章、宣传页，都从聊天开始",
+      "subtitle": "不知道做哪种页面也没关系，直接告诉 AI 你的目的，它会帮你整理页面结构。",
+      "kicker": "USE CASE MAP",
+      "prompt": "几句话，生成一个能直接分享的网页。",
+      "url": "https://start.xlog.ink/",
+      "atmosphere": "use-case-grid-background.webp",
+      "mockup": "10-use-case-overview.png",
+      "primaryCta": "开始创建页面",
+      "secondaryCta": "浏览全部场景",
+      "storyTitle": "一个入口，覆盖十几种轻量页面需求",
+      "story": "从个人名片到小店宣传，从活动链接到文章页面，xlog.ink 适合那些不值得搭完整网站、但确实需要一个页面的场景。",
+      "features": [
+        ["个人名片", "简介、链接、联系方式。"],
+        ["活动页面", "时间、地点、报名和流程。"],
+        ["宣传海报", "卖点、图片、二维码和行动按钮。"]
+      ],
+      "keywords": ["AI 页面生成器", "轻量网页生成", "活动页生成", "宣传页生成"]
+    }
+  ]
+}

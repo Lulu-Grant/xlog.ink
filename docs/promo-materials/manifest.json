@@ -1,0 +1,93 @@
+{
+  "version": 1,
+  "source": "xlog.ink promo materials",
+  "rule": "Product visuals are HTML mockups; abstract graphics are SVG; AI images are atmosphere only.",
+  "sets": [
+    {
+      "id": "01-coffee-anniversary",
+      "page": "咖啡店周五福利页",
+      "htmlMockup": "mockups/index.html#01",
+      "render": "renders/01-coffee-anniversary.png",
+      "aiImage": "ai-images/coffee-anniversary-hero.webp",
+      "aiPrompt": "prompts/ai-images.md#01-coffee-anniversary",
+      "svgNeeds": ["qr-frame", "browser-shell"]
+    },
+    {
+      "id": "02-qr-service",
+      "page": "二维码服务页",
+      "htmlMockup": "mockups/index.html#02",
+      "render": "renders/02-qr-service.png",
+      "svgNeeds": ["qr-frame", "phone-scan", "flow-generate"]
+    },
+    {
+      "id": "03-event-notice",
+      "page": "活动通知页",
+      "htmlMockup": "mockups/index.html#03",
+      "render": "renders/03-event-notice.png",
+      "aiImage": "ai-images/weekend-reading-salon.webp",
+      "aiPrompt": "prompts/ai-images.md#03-event-notice",
+      "svgNeeds": ["qr-frame"]
+    },
+    {
+      "id": "04-personal-intro",
+      "page": "个人介绍页",
+      "htmlMockup": "mockups/index.html#04",
+      "render": "renders/04-personal-intro.png",
+      "aiImage": "ai-images/personal-brand-workdesk.webp",
+      "aiPrompt": "prompts/ai-images.md#04-personal-intro",
+      "svgNeeds": ["phone-scan"]
+    },
+    {
+      "id": "05-shop-promo",
+      "page": "小店宣传页",
+      "htmlMockup": "mockups/index.html#05",
+      "render": "renders/05-shop-promo.png",
+      "aiImage": "ai-images/studio-shop-promo.webp",
+      "aiPrompt": "prompts/ai-images.md#05-shop-promo",
+      "svgNeeds": ["qr-frame"]
+    },
+    {
+      "id": "06-ai-publish-flow",
+      "page": "AI 直接发布网页",
+      "htmlMockup": "mockups/index.html#06",
+      "render": "renders/06-ai-publish-flow.png",
+      "svgNeeds": ["flow-generate", "seo-card"]
+    },
+    {
+      "id": "07-activity-link",
+      "page": "活动信息链接页",
+      "htmlMockup": "mockups/index.html#07",
+      "render": "renders/07-activity-link.png",
+      "aiImage": "ai-images/music-salon-evening.webp",
+      "aiPrompt": "prompts/ai-images.md#07-activity-link",
+      "svgNeeds": ["qr-frame"]
+    },
+    {
+      "id": "08-logo-brand",
+      "page": "Logo 品牌页",
+      "htmlMockup": "mockups/index.html#08",
+      "render": "renders/08-logo-brand.png",
+      "aiImage": "ai-images/brand-visual-system.webp",
+      "aiPrompt": "prompts/ai-images.md#08-logo-brand",
+      "svgNeeds": ["seo-card"]
+    },
+    {
+      "id": "09-social-promo",
+      "page": "朋友圈宣传页",
+      "htmlMockup": "mockups/index.html#09",
+      "render": "renders/09-social-promo.png",
+      "aiImage": "ai-images/social-share-background.webp",
+      "aiPrompt": "prompts/ai-images.md#09-social-promo",
+      "svgNeeds": ["phone-scan", "qr-frame"]
+    },
+    {
+      "id": "10-use-case-overview",
+      "page": "场景总览页",
+      "htmlMockup": "mockups/index.html#10",
+      "render": "renders/10-use-case-overview.png",
+      "aiImage": "ai-images/use-case-grid-background.webp",
+      "aiPrompt": "prompts/ai-images.md#10-use-case-overview",
+      "svgNeeds": ["page-type-icons", "flow-generate"]
+    }
+  ]
+}

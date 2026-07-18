@@ -1,0 +1,575 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>xlog.ink 宣传页草图</title>
+  <style>
+    :root {
+      --bg: #f3f0ea;
+      --paper: #f8f6f1;
+      --ink: #201f1c;
+      --muted: #7c756d;
+      --line: #2a2925;
+      --soft: #ded8cf;
+      --accent: #df7655;
+      --accent-soft: #f4d6c9;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background:
+        linear-gradient(rgba(42,41,37,.06) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(42,41,37,.06) 1px, transparent 1px),
+        var(--bg);
+      background-size: 28px 28px;
+      color: var(--ink);
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Noto Sans SC", monospace;
+    }
+    .board {
+      width: min(1480px, calc(100vw - 48px));
+      margin: 32px auto 56px;
+    }
+    .board-head {
+      display: flex;
+      justify-content: space-between;
+      gap: 24px;
+      align-items: flex-end;
+      margin-bottom: 22px;
+      border-bottom: 2px solid var(--line);
+      padding-bottom: 16px;
+    }
+    h1 {
+      margin: 0;
+      font-size: 28px;
+      letter-spacing: 0;
+      line-height: 1.25;
+    }
+    .meta {
+      margin: 8px 0 0;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.7;
+    }
+    .legend {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+      color: var(--muted);
+      font-size: 12px;
+    }
+    .legend span {
+      border: 1.5px solid var(--line);
+      padding: 5px 8px;
+      background: var(--paper);
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 24px;
+    }
+    .wire {
+      background: var(--paper);
+      border: 2px solid var(--line);
+      min-height: 620px;
+      display: grid;
+      grid-template-rows: auto auto 1fr auto;
+      box-shadow: 8px 8px 0 rgba(32,31,28,.08);
+    }
+    .topbar {
+      height: 44px;
+      border-bottom: 2px solid var(--line);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 18px;
+      font-size: 13px;
+      font-weight: 700;
+    }
+    .brand::before {
+      content: "";
+      display: inline-block;
+      width: 9px;
+      height: 13px;
+      background: var(--accent);
+      margin-right: 9px;
+      vertical-align: -2px;
+    }
+    .nav {
+      display: flex;
+      gap: 8px;
+      color: var(--muted);
+      font-size: 11px;
+    }
+    .tag {
+      border: 1.5px solid var(--soft);
+      padding: 4px 7px;
+      background: #fffaf4;
+    }
+    .title-row {
+      padding: 16px 18px 0;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.6;
+    }
+    .title-row strong {
+      display: block;
+      margin-bottom: 4px;
+      color: var(--ink);
+      font-size: 17px;
+    }
+    .hero {
+      padding: 18px;
+      display: grid;
+      grid-template-columns: 1.02fr .98fr;
+      gap: 18px;
+      align-items: stretch;
+    }
+    .hero-copy {
+      border: 2px solid var(--line);
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      gap: 16px;
+      min-height: 190px;
+    }
+    .eyebrow {
+      color: var(--accent);
+      font-weight: 700;
+      font-size: 12px;
+    }
+    h2 {
+      margin: 0;
+      font-size: 27px;
+      line-height: 1.25;
+      letter-spacing: 0;
+    }
+    .sub {
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.7;
+    }
+    .cta-row {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+    .btn {
+      border: 2px solid var(--line);
+      background: var(--accent);
+      color: #fff;
+      padding: 10px 14px;
+      font-weight: 700;
+      font-size: 12px;
+    }
+    .btn.secondary {
+      background: transparent;
+      color: var(--ink);
+    }
+    .visual {
+      border: 2px solid var(--line);
+      min-height: 190px;
+      background:
+        linear-gradient(135deg, transparent 48%, var(--soft) 49%, var(--soft) 51%, transparent 52%),
+        linear-gradient(45deg, transparent 48%, var(--soft) 49%, var(--soft) 51%, transparent 52%),
+        #fffaf4;
+      position: relative;
+      overflow: hidden;
+    }
+    .visual::before {
+      content: attr(data-label);
+      position: absolute;
+      left: 14px;
+      top: 12px;
+      color: var(--muted);
+      font-size: 12px;
+      background: var(--paper);
+      border: 1.5px solid var(--line);
+      padding: 5px 8px;
+    }
+    .visual::after {
+      content: "";
+      position: absolute;
+      right: 20px;
+      bottom: 20px;
+      width: 110px;
+      height: 76px;
+      border: 2px solid var(--accent);
+      background: rgba(223,118,85,.08);
+    }
+    .content {
+      padding: 0 18px 18px;
+      display: grid;
+      gap: 14px;
+      align-content: start;
+    }
+    .prompt {
+      border: 2px solid var(--line);
+      background: #fffaf4;
+      padding: 13px 14px;
+      font-size: 12px;
+      line-height: 1.7;
+    }
+    .prompt b {
+      color: var(--accent);
+    }
+    .blocks {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 10px;
+    }
+    .block {
+      border: 1.5px solid var(--soft);
+      padding: 12px;
+      min-height: 88px;
+      background: rgba(255,250,244,.62);
+      font-size: 12px;
+      line-height: 1.55;
+    }
+    .block strong {
+      display: block;
+      margin-bottom: 8px;
+      color: var(--ink);
+      font-size: 12px;
+    }
+    .flow {
+      display: grid;
+      grid-template-columns: 1fr 32px 1fr 32px 1fr;
+      gap: 8px;
+      align-items: center;
+    }
+    .step {
+      border: 1.5px solid var(--line);
+      padding: 10px;
+      min-height: 68px;
+      font-size: 11px;
+      line-height: 1.5;
+      background: var(--paper);
+    }
+    .arrow {
+      color: var(--accent);
+      text-align: center;
+      font-weight: 900;
+    }
+    .preview-strip {
+      display: grid;
+      grid-template-columns: .85fr 1.15fr;
+      gap: 12px;
+      align-items: stretch;
+    }
+    .qr {
+      border: 2px solid var(--line);
+      min-height: 116px;
+      background:
+        linear-gradient(90deg, var(--line) 25%, transparent 25% 50%, var(--line) 50% 75%, transparent 75%),
+        linear-gradient(var(--line) 25%, transparent 25% 50%, var(--line) 50% 75%, transparent 75%);
+      background-size: 20px 20px;
+      opacity: .85;
+    }
+    .mini-page {
+      border: 2px solid var(--line);
+      padding: 10px;
+      display: grid;
+      gap: 8px;
+      background: #fffaf4;
+    }
+    .line {
+      height: 8px;
+      background: var(--soft);
+    }
+    .line.w80 { width: 80%; }
+    .line.w60 { width: 60%; }
+    .line.w40 { width: 40%; }
+    .thumb {
+      height: 44px;
+      border: 1.5px solid var(--accent);
+      background: var(--accent-soft);
+    }
+    .footer {
+      border-top: 2px solid var(--line);
+      padding: 12px 18px;
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+    .footer strong { color: var(--ink); }
+
+    .wire.compact .hero { grid-template-columns: 1fr; }
+    .wire.compact .visual { min-height: 120px; }
+    .wire.compact .hero-copy { min-height: 150px; }
+    .wire.poster .hero { grid-template-columns: .9fr 1.1fr; }
+    .wire.poster .visual { min-height: 250px; }
+    .wire.article .content { grid-template-columns: 1fr .65fr; }
+    .wire.article .prompt,
+    .wire.article .flow { grid-column: 1 / -1; }
+    .wire.aggregate .blocks { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+
+    @media (max-width: 980px) {
+      .board { width: min(760px, calc(100vw - 24px)); margin-top: 18px; }
+      .board-head { align-items: flex-start; flex-direction: column; }
+      .grid { grid-template-columns: 1fr; }
+      .wire { min-height: auto; }
+      .hero,
+      .wire.poster .hero { grid-template-columns: 1fr; }
+      .wire.article .content { grid-template-columns: 1fr; }
+      .wire.aggregate .blocks,
+      .blocks { grid-template-columns: 1fr 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <main class="board">
+    <header class="board-head">
+      <div>
+        <h1>xlog.ink 宣传页面 10 个低保真草图</h1>
+        <p class="meta">目标：每页都用一个真实场景解释“几句话生成可分享网页”，统一导回首页并预填 prompt。</p>
+      </div>
+      <div class="legend">
+        <span>□ 页面截图位</span>
+        <span>■ CTA</span>
+        <span>▥ 二维码/分享</span>
+      </div>
+    </header>
+
+    <section class="grid">
+      <article class="wire">
+        <div class="topbar"><span class="brand">xlog.ink</span><span class="nav"><span class="tag">案例 01</span><span class="tag">小店活动</span></span></div>
+        <div class="title-row"><strong>一句话生成咖啡店活动页</strong>适合咖啡店、餐饮店、线下小店做短期活动宣传。</div>
+        <div class="hero">
+          <div class="hero-copy">
+            <span class="eyebrow">COFFEE EVENT</span>
+            <h2>周五免费冰美式，直接变成活动网页</h2>
+            <p class="sub">输入店名、活动、地点，AI 整理成可分享页面、二维码和独立链接。</p>
+            <div class="cta-row"><span class="btn">生成我的小店活动页</span><span class="btn secondary">查看示例</span></div>
+          </div>
+          <div class="visual" data-label="活动页预览"></div>
+        </div>
+        <div class="content">
+          <div class="prompt"><b>输入示例：</b>帮我做一个咖啡店活动页，店名叫呆会咖啡，每周五免费喝冰美式，地点青岛，到店即可。</div>
+          <div class="blocks">
+            <div class="block"><strong>痛点</strong>活动只发群消息容易被刷走。</div>
+            <div class="block"><strong>结果</strong>生成时间、地址、参与方式和门店氛围。</div>
+            <div class="block"><strong>分享</strong>贴二维码到海报、吧台、朋友圈。</div>
+          </div>
+          <div class="preview-strip"><div class="qr"></div><div class="mini-page"><div class="thumb"></div><div class="line w80"></div><div class="line w60"></div><div class="line w40"></div></div></div>
+        </div>
+        <footer class="footer"><span>SEO: 咖啡店活动页生成</span><strong>/?prompt=咖啡店活动页</strong></footer>
+      </article>
+
+      <article class="wire compact">
+        <div class="topbar"><span class="brand">xlog.ink</span><span class="nav"><span class="tag">案例 02</span><span class="tag">二维码服务页</span></span></div>
+        <div class="title-row"><strong>把服务介绍变成一个二维码页面</strong>适合服务型个人、工作室、咨询业务。</div>
+        <div class="hero">
+          <div class="hero-copy">
+            <span class="eyebrow">SERVICE QR PAGE</span>
+            <h2>客户扫码，就能看懂你提供什么服务</h2>
+            <p class="sub">服务内容、价格说明、预约方式、联系方式集中在一个页面。</p>
+            <div class="cta-row"><span class="btn">生成服务介绍页</span></div>
+          </div>
+          <div class="visual" data-label="二维码落地页"></div>
+        </div>
+        <div class="content">
+          <div class="flow"><div class="step">输入服务介绍</div><div class="arrow">→</div><div class="step">AI 整理卖点</div><div class="arrow">→</div><div class="step">生成二维码页</div></div>
+          <div class="prompt"><b>输入示例：</b>帮我做一个摄影服务介绍页，包含作品风格、预约方式、价格说明和联系方式。</div>
+          <div class="blocks">
+            <div class="block"><strong>用于</strong>名片、海报、桌牌。</div>
+            <div class="block"><strong>展示</strong>服务项目与行动按钮。</div>
+            <div class="block"><strong>转化</strong>扫码后直接咨询。</div>
+          </div>
+        </div>
+        <footer class="footer"><span>SEO: 二维码服务介绍页</span><strong>扫码展示</strong></footer>
+      </article>
+
+      <article class="wire compact">
+        <div class="topbar"><span class="brand">xlog.ink</span><span class="nav"><span class="tag">案例 03</span><span class="tag">活动通知</span></span></div>
+        <div class="title-row"><strong>活动通知别只发群消息，做成一个页面</strong>群消息会被刷走，页面可以反复转发。</div>
+        <div class="hero">
+          <div class="hero-copy">
+            <span class="eyebrow">EVENT NOTICE</span>
+            <h2>时间、地点、报名方式，一页讲清楚</h2>
+            <p class="sub">适合读书会、沙龙、课程、聚会、展览和临时活动。</p>
+            <div class="cta-row"><span class="btn">生成活动通知页</span><span class="btn secondary">复制活动模板</span></div>
+          </div>
+          <div class="visual" data-label="活动通知页面"></div>
+        </div>
+        <div class="content">
+          <div class="prompt"><b>输入示例：</b>做一个周末读书会活动页，时间周六下午，地点深圳南山，免费参加，需要提前报名。</div>
+          <div class="blocks">
+            <div class="block"><strong>基础信息</strong>时间 / 地点 / 报名。</div>
+            <div class="block"><strong>活动亮点</strong>AI 自动补全结构。</div>
+            <div class="block"><strong>传播</strong>链接 + QR Code。</div>
+          </div>
+        </div>
+        <footer class="footer"><span>SEO: 活动通知页面生成器</span><strong>一键转发</strong></footer>
+      </article>
+
+      <article class="wire">
+        <div class="topbar"><span class="brand">xlog.ink</span><span class="nav"><span class="tag">案例 04</span><span class="tag">个人介绍</span></span></div>
+        <div class="title-row"><strong>30 秒生成一个个人介绍页</strong>把简介、联系方式、作品入口整理成一个轻量主页。</div>
+        <div class="hero">
+          <div class="hero-copy">
+            <span class="eyebrow">PERSONAL PROFILE</span>
+            <h2>你的个人名片，不必从零设计</h2>
+            <p class="sub">适合自由职业者、顾问、设计师、老师、内容创作者。</p>
+            <div class="cta-row"><span class="btn">生成个人介绍页</span></div>
+          </div>
+          <div class="visual" data-label="个人主页截图"></div>
+        </div>
+        <div class="content">
+          <div class="prompt"><b>输入示例：</b>帮我做一个个人名片页，我是独立设计师，擅长品牌视觉和网页设计，放微信和邮箱。</div>
+          <div class="blocks">
+            <div class="block"><strong>头像/Logo</strong>可上传或留空。</div>
+            <div class="block"><strong>内容</strong>简介、技能、链接。</div>
+            <div class="block"><strong>动作</strong>加微信 / 发邮件。</div>
+          </div>
+          <div class="preview-strip"><div class="mini-page"><div class="thumb"></div><div class="line w80"></div><div class="line w60"></div></div><div class="mini-page"><div class="line w80"></div><div class="line w80"></div><div class="line w60"></div><div class="line w40"></div></div></div>
+        </div>
+        <footer class="footer"><span>SEO: AI 个人主页生成</span><strong>个人名片</strong></footer>
+      </article>
+
+      <article class="wire poster">
+        <div class="topbar"><span class="brand">xlog.ink</span><span class="nav"><span class="tag">案例 05</span><span class="tag">小店宣传</span></span></div>
+        <div class="title-row"><strong>给小店做宣传页，不用设计师</strong>服务项目、门店图片、地址和预约方式一次整理。</div>
+        <div class="hero">
+          <div class="hero-copy">
+            <span class="eyebrow">SHOP PROMO</span>
+            <h2>把小店介绍做成能转发的网页海报</h2>
+            <p class="sub">适合美甲、摄影、咖啡、课程、工作室、私域卖货。</p>
+            <div class="cta-row"><span class="btn">生成小店宣传页</span></div>
+          </div>
+          <div class="visual" data-label="宣传海报网页"></div>
+        </div>
+        <div class="content">
+          <div class="prompt"><b>输入示例：</b>帮我做一个美甲工作室宣传页，风格高级温柔，展示服务项目、地址、预约微信。</div>
+          <div class="blocks">
+            <div class="block"><strong>视觉</strong>上传门店图 / Logo。</div>
+            <div class="block"><strong>内容</strong>服务、价格、地址。</div>
+            <div class="block"><strong>传播</strong>朋友圈 + 二维码。</div>
+          </div>
+        </div>
+        <footer class="footer"><span>SEO: 小店宣传页制作</span><strong>无设计门槛</strong></footer>
+      </article>
+
+      <article class="wire">
+        <div class="topbar"><span class="brand">xlog.ink</span><span class="nav"><span class="tag">案例 06</span><span class="tag">AI 发布</span></span></div>
+        <div class="title-row"><strong>AI 不只写文案，还能直接发布网页</strong>强调差异：不是复制一段文字，而是生成可访问页面。</div>
+        <div class="hero">
+          <div class="hero-copy">
+            <span class="eyebrow">AI WEB PUBLISH</span>
+            <h2>从一句描述到独立链接，少一个工具都不用开</h2>
+            <p class="sub">AI 整理需求、生成 HTML、发布二级域名、生成二维码。</p>
+            <div class="cta-row"><span class="btn">试一次生成网页</span><span class="btn secondary">看流程</span></div>
+          </div>
+          <div class="visual" data-label="聊天生成流程"></div>
+        </div>
+        <div class="content">
+          <div class="flow"><div class="step">聊天描述</div><div class="arrow">→</div><div class="step">AI 生成页面</div><div class="arrow">→</div><div class="step">链接/二维码</div></div>
+          <div class="blocks">
+            <div class="block"><strong>区别</strong>不是文案工具。</div>
+            <div class="block"><strong>输出</strong>完整可访问网页。</div>
+            <div class="block"><strong>交付</strong>URL / QR / 截图。</div>
+          </div>
+        </div>
+        <footer class="footer"><span>SEO: AI 自动发布网页</span><strong>完整链路</strong></footer>
+      </article>
+
+      <article class="wire compact">
+        <div class="topbar"><span class="brand">xlog.ink</span><span class="nav"><span class="tag">案例 07</span><span class="tag">活动链接</span></span></div>
+        <div class="title-row"><strong>一个链接讲清楚你的活动</strong>适合需要持续传播和反复确认信息的活动。</div>
+        <div class="hero">
+          <div class="hero-copy">
+            <span class="eyebrow">ACTIVITY LINK</span>
+            <h2>把活动信息压缩成一个好转发的链接</h2>
+            <p class="sub">嘉宾、流程、地址、报名方式、注意事项都放进去。</p>
+            <div class="cta-row"><span class="btn">生成活动链接页</span></div>
+          </div>
+          <div class="visual" data-label="链接页首屏"></div>
+        </div>
+        <div class="content">
+          <div class="prompt"><b>输入示例：</b>帮我做一个音乐沙龙活动页，包含活动介绍、嘉宾、流程、地址和联系方式。</div>
+          <div class="preview-strip"><div class="qr"></div><div class="mini-page"><div class="line w80"></div><div class="line w80"></div><div class="line w60"></div><div class="thumb"></div></div></div>
+        </div>
+        <footer class="footer"><span>SEO: 活动链接生成</span><strong>可反复转发</strong></footer>
+      </article>
+
+      <article class="wire">
+        <div class="topbar"><span class="brand">xlog.ink</span><span class="nav"><span class="tag">案例 08</span><span class="tag">Logo 品牌页</span></span></div>
+        <div class="title-row"><strong>上传一张 Logo，生成完整品牌页面</strong>让品牌视觉进入页面，而不是只生成文字。</div>
+        <div class="hero">
+          <div class="hero-copy">
+            <span class="eyebrow">LOGO TO PAGE</span>
+            <h2>把 Logo、介绍和服务整理成品牌展示页</h2>
+            <p class="sub">上传 Logo，AI 自动作为主视觉或品牌元素使用。</p>
+            <div class="cta-row"><span class="btn">上传 Logo 生成页面</span></div>
+          </div>
+          <div class="visual" data-label="Logo 品牌页"></div>
+        </div>
+        <div class="content">
+          <div class="prompt"><b>输入示例：</b>这是我们的 logo，帮我做一个品牌介绍页，风格简洁专业，包含服务介绍和联系方式。</div>
+          <div class="blocks">
+            <div class="block"><strong>素材</strong>Logo / 产品图。</div>
+            <div class="block"><strong>版位</strong>Hero / 介绍 / 联系。</div>
+            <div class="block"><strong>结果</strong>品牌化页面。</div>
+          </div>
+        </div>
+        <footer class="footer"><span>SEO: Logo 生成品牌页面</span><strong>图片参与生成</strong></footer>
+      </article>
+
+      <article class="wire poster">
+        <div class="topbar"><span class="brand">xlog.ink</span><span class="nav"><span class="tag">案例 09</span><span class="tag">朋友圈宣传</span></span></div>
+        <div class="title-row"><strong>想发朋友圈宣传？先生成一个能扫码打开的网页</strong>比纯文字更完整，比长图更灵活。</div>
+        <div class="hero">
+          <div class="hero-copy">
+            <span class="eyebrow">SOCIAL SHARE</span>
+            <h2>朋友圈里放不下的内容，放进一个网页</h2>
+            <p class="sub">课程、服务、活动、小店介绍，都可以配链接和二维码。</p>
+            <div class="cta-row"><span class="btn">生成朋友圈宣传页</span></div>
+          </div>
+          <div class="visual" data-label="朋友圈分享卡片"></div>
+        </div>
+        <div class="content">
+          <div class="prompt"><b>输入示例：</b>帮我做一个朋友圈宣传页，介绍我的课程，适合宝妈和自由职业者，留下微信咨询。</div>
+          <div class="blocks">
+            <div class="block"><strong>发文</strong>一句话 + 链接。</div>
+            <div class="block"><strong>扫码</strong>海报可放 QR。</div>
+            <div class="block"><strong>转化</strong>最后放咨询入口。</div>
+          </div>
+        </div>
+        <footer class="footer"><span>SEO: 朋友圈宣传页</span><strong>社交分享</strong></footer>
+      </article>
+
+      <article class="wire aggregate">
+        <div class="topbar"><span class="brand">xlog.ink</span><span class="nav"><span class="tag">案例 10</span><span class="tag">场景总览</span></span></div>
+        <div class="title-row"><strong>xlog.ink 可以生成哪些页面？</strong>作为 SEO 主入口，承接所有长尾场景。</div>
+        <div class="hero">
+          <div class="hero-copy">
+            <span class="eyebrow">USE CASES</span>
+            <h2>名片、活动、文章、宣传页，都从聊天开始</h2>
+            <p class="sub">用一个总览页面解释产品边界，并把用户导向具体场景。</p>
+            <div class="cta-row"><span class="btn">开始创建</span><span class="btn secondary">查看全部场景</span></div>
+          </div>
+          <div class="visual" data-label="多场景矩阵"></div>
+        </div>
+        <div class="content">
+          <div class="blocks">
+            <div class="block"><strong>个人名片</strong>简介、链接、联系方式。</div>
+            <div class="block"><strong>活动页面</strong>时间、地点、报名。</div>
+            <div class="block"><strong>宣传海报</strong>卖点、图片、二维码。</div>
+            <div class="block"><strong>文章页面</strong>长文、封面、作者。</div>
+            <div class="block"><strong>投稿说明</strong>邮箱、规则、流程。</div>
+            <div class="block"><strong>联系我们</strong>多渠道联系方式。</div>
+            <div class="block"><strong>小店介绍</strong>地址、服务、预约。</div>
+            <div class="block"><strong>产品服务</strong>功能、价格、购买。</div>
+          </div>
+          <div class="prompt"><b>总入口文案：</b>不知道做哪种页面？直接告诉 AI 你的目的，它会帮你判断页面结构。</div>
+        </div>
+        <footer class="footer"><span>SEO: AI 页面生成器使用场景</span><strong>主 SEO 页</strong></footer>
+      </article>
+    </section>
+  </main>
+</body>
+</html>
