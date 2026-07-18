@@ -39,7 +39,7 @@ V2 现有代码中，"什么时候浮现什么 UI" 由两套脆弱机制决定�
 
 两层都不需要独立的前置模型。独立前置模型只有在出现"时机既不确定、又不能等会话模型说完一整句"的需求（如输入时实时拦截分流）时才有意义——当前没有此类需求，明确不引入。
 
-两条路径可以指向同一个组件：模型打 `UPLOAD` 标记唤起上传卡（语义路由），模型打 `PUBLISH` 标记时前端浮出生成确认卡；真正发布仍必须由用户点击确认按钮触发。
+两条路径可以指向同一个组件：模型打 `UPLOAD` 标记唤起上传卡，模型打 `NEW_SESSION` 标记唤起新会话确认卡；用户也可以直接点击头部“+”打开同一张确认卡。模型打 `PUBLISH` 标记时前端浮出生成确认卡；真正发布仍必须由用户点击确认按钮触发。
 
 ---
 
@@ -51,7 +51,7 @@ V2 现有代码中，"什么时候浮现什么 UI" 由两套脆弱机制决定�
 [[ACTION:TYPE key=value key2=value2]]
 ```
 
-- 位置：必须在回复**最末尾单独一行**；
+- 位置：prompt 要求在回复**最末尾单独一行**；后端为兼容弱模型偶发的尾随文本，会从完整回复中提取最后一个有效标记；
 - 数量：每条回复**至多一个**标记；多个时只取最后一个，其余按正文剥离；
 - 参数：`key=value` 对，空格分隔；value 不含空格（需要空格的值用 `_` 连接或省略）；参数均为可选；
 - 用户**永远不应看到**标记原文（剥离责任在后端，见 4.1）。
@@ -64,6 +64,9 @@ V2 现有代码中，"什么时候浮现什么 UI" 由两套脆弱机制决定�
 | `READY` | 生成确认卡 | `reason`（一句话总结为何已就绪） | 确认卡文案 |
 | `PUBLISH` | 生成前确认卡 | `reason` | 仅表示模型认为用户已授权生成；前端不再自动发布，必须等待用户点击确认 |
 | `EMAIL` | 邮箱绑定卡 | — | 发布后引导留邮箱（替代现在写死在 result 回调里的话术触发） |
+| `DOMAIN` | 自定义域名前缀卡 | `hint` | 仅在用户主动提出自定义前缀时出现 |
+| `IMAGE_GEN` | AI 资料图生成卡 | `slot`、`prompt` | 仅在用户明确要求生成图片时出现 |
+| `NEW_SESSION` | 新会话确认卡 | — | 确认后创建独立 session；旧消息、图片、页面和编辑状态不带入 |
 
 扩展规则：新增动作 = 在此表加一行 + 前端加一个渲染分支 + prompt 加一条说明。不需要动协议本身。
 
@@ -74,6 +77,7 @@ V2 现有代码中，"什么时候浮现什么 UI" 由两套脆弱机制决定�
 - `READY` 标记只浮出确认卡；真正生成仍由用户点击 + 后端额度/Turnstile 裁决（现有架构不变）；
 - `PUBLISH` 标记只会浮出生成前确认卡；前端不再用正则解析用户消息，也不会自动调用发布接口；
 - `UPLOAD` 标记只浮出上传卡；上传量限制仍由后端 per-session 上限管控；
+- `NEW_SESSION` 标记只浮出确认卡；真正切换 session 仍由用户点击确认，头部“+”提供不依赖模型的确定性入口；
 - 模型乱打标记的最坏后果是多浮一张卡，不会产生越权动作。
 
 ---
@@ -91,16 +95,13 @@ V2 现有代码中，"什么时候浮现什么 UI" 由两套脆弱机制决定�
 
 ```php
 // 流结束后
-if (preg_match('/\[\[ACTION:([A-Z]+)((?:\s+\w+=\S+)*)\]\]\s*$/u', $assistant, $m)) {
-    $action = $m[1];                       // UPLOAD | READY | PUBLISH | EMAIL
-    $params = parse_action_params($m[2]);  // ['slot' => 'hero', ...]
-    $clean  = preg_replace('/\s*\[\[ACTION:[^\]]*\]\]\s*$/u', '', $assistant);
-    // 白名单校验：未知 TYPE 一律忽略（只剥离不转发）
-    if (in_array($action, ['UPLOAD', 'READY', 'PUBLISH', 'EMAIL'], true)) {
-        if ($action === 'READY') {
-            db_exec('UPDATE sessions SET state=?, updated_at=? WHERE id=?', ['ready', now_iso(), $sessionId]);
+if (preg_match_all('/\[\[ACTION:([A-Z_]+)((?:\s+\w+=\S+)*)\]\]/u', $assistant, $matches, PREG_SET_ORDER)) {
+    foreach (array_reverse($matches) as $m) {
+        $action = strtolower($m[1]);
+        if (in_array($action, ['upload', 'ready', 'publish', 'email', 'domain', 'image_gen', 'new_session'], true)) {
+            sse_event('action', ['type' => $action, 'params' => parse_action_params($m[2] ?? '')]);
+            break;
         }
-        sse_event('action', ['type' => strtolower($action), 'params' => $params]);
     }
 }
 ```
@@ -179,4 +180,5 @@ action: function (d) {
 | 标记剥离责任 | 后端流尾缓冲，前端永不接触标记原文 | 顺带修复 `[READY]` 拆包闪烁 |
 | 标记的权限性质 | 仅为建议；生成/上传的真实裁决在后端额度与 Turnstile | 模型乱打标记最坏只是多浮一张卡 |
 | PUBLISH 触发边界 | 模型 `PUBLISH` 只展示确认卡，用户点击确认才发布 | 避免前端机械猜测语义，同时防止模型单方面烧额度 |
+| 真正重新开始的边界 | 模型 `NEW_SESSION` 或用户点击头部“+”只展示确认卡；确认后创建全新 session | “重新生成”保留上下文，“从零开始”隔离消息、图片、页面、域名和编辑状态；不使用关键词兜底 |
 | 重新引入前置模型的条件 | 出现"不能等会话模型说完整句"的实时拦截分流需求时再评估 | 当前无此需求 |

@@ -1,5 +1,6 @@
 <?php
 require_once __DIR__ . '/../includes/ai.php';
+require_once __DIR__ . '/../includes/chat_actions.php';
 
 @set_time_limit(120);
 @ini_set('max_execution_time', '120');
@@ -97,52 +98,4 @@ function truncate_messages_for_chat(array $messages) {
 function chat_model_message(array $m) {
     $role = ($m['role'] ?? '') === 'user' ? 'user' : 'assistant';
     return ['role' => $role, 'content' => (string)($m['content'] ?? '')];
-}
-
-function extract_chat_action($text) {
-    $text = (string)$text;
-    if (preg_match('/\[\[ACTION:([A-Z_]+)((?:\s+\w+=\S+)*)\]\]\s*$/u', $text, $m)) {
-        $type = strtolower($m[1]);
-        if (in_array($type, ['upload', 'ready', 'publish', 'email', 'domain', 'image_gen'], true)) {
-            return ['type' => $type, 'params' => parse_action_params($m[2] ?? '')];
-        }
-        return null;
-    }
-    if (preg_match('/\n?\s*\[READY\]\s*$/u', $text)) {
-        return ['type' => 'ready', 'params' => []];
-    }
-    if (preg_match('/\n?\s*\[UPLOAD\]\s*$/u', $text)) {
-        return ['type' => 'upload', 'params' => []];
-    }
-    return null;
-}
-
-function parse_action_params($raw) {
-    $params = [];
-    if (preg_match_all('/\s+(\w+)=([^\s\]]+)/u', (string)$raw, $matches, PREG_SET_ORDER)) {
-        foreach ($matches as $match) {
-            $key = strtolower($match[1]);
-            $value = str_replace('_', ' ', $match[2]);
-            if (in_array($key, ['slot', 'hint', 'reason', 'prefix', 'prompt'], true)) {
-                $params[$key] = mb_substr($value, 0, 120, 'UTF-8');
-            }
-        }
-    }
-    if (isset($params['slot']) && !in_array($params['slot'], ['hero', 'avatar', 'product', 'gallery'], true)) {
-        unset($params['slot']);
-    }
-    return $params;
-}
-
-function strip_chat_action_markers($text) {
-    $text = preg_replace('/\s*\[\[ACTION:[A-Z_]+(?:\s+\w+=\S+)*\]\]\s*/u', '', (string)$text);
-    $text = preg_replace('/\s*\[(?:READY|UPLOAD)\]\s*/u', '', $text);
-    return $text;
-}
-
-function sanitize_user_chat_message($text) {
-    $text = trim((string)$text);
-    $text = preg_replace('/\s*\[\[ACTION:[A-Z_]+(?:\s+\w+=\S+)*\]\]\s*/u', ' ', $text);
-    $text = preg_replace('/\s*\[(?:READY|UPLOAD)\]\s*/u', ' ', $text);
-    return trim(preg_replace('/[ \t]{2,}/u', ' ', $text));
 }

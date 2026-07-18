@@ -19,7 +19,7 @@ $allAppCopy = get_i18n()['app'];
   <meta property="og:title" content="<?php echo h($appCopy['pageTitle']); ?>">
   <meta property="og:description" content="<?php echo h($appCopy['ogDescription']); ?>">
   <meta property="og:image" content="/assets/og/cover.jpg">
-  <link rel="stylesheet" href="/css/page-ai.css?v=20260614v46">
+  <link rel="stylesheet" href="/css/page-ai.css?v=20260713v47">
   <link rel="icon" href="/favicon.ico">
   <?php if ($turnstileEnabled && $turnstileSiteKey !== ''): ?>
   <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
@@ -35,6 +35,7 @@ $allAppCopy = get_i18n()['app'];
       <header class="topbar">
         <a class="brand" id="brandLink" href="/">xlog.ink</a>
         <nav class="top-actions" aria-label="Account and status">
+          <button id="newSessionToggle" type="button" class="new-session-btn" aria-label="<?php echo h($appCopy['newSession']); ?>" title="<?php echo h($appCopy['newSession']); ?>">+</button>
           <div id="localeSwitch" class="locale-switch" aria-label="Language">
             <button type="button" data-locale-choice="zh-CN" <?php echo $locale === 'zh-CN' ? 'aria-current="true"' : ''; ?>>简</button>
             <button type="button" data-locale-choice="zh-TW" <?php echo $locale === 'zh-TW' ? 'aria-current="true"' : ''; ?>>繁</button>
@@ -87,6 +88,6 @@ $allAppCopy = get_i18n()['app'];
   window.XLOG_LOCALE = <?php echo json_encode($locale, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES); ?>;
   window.XLOG_I18N = <?php echo json_encode($allAppCopy, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES); ?>;
   </script>
-  <script src="/js/ai-app.js?v=20260614v43"></script>
+  <script src="/js/ai-app.js?v=20260713v44"></script>
 </body>
 </html>

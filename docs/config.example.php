@@ -13,14 +13,14 @@ return [
         'base_url' => 'https://api.3s3.org',
         'chat' => [
             'base_url' => 'https://api.3s3.org',
-            'model' => 'google/gemma-4-E4B-it',
+            'model' => 'gpt-5.4-mini',
             'format' => 'openai',
             'key' => '<CHAT_API_KEY>',
             'max_tokens' => 1024,
             'fallbacks' => [
                 [
                     'base_url' => 'https://api.3s3.org',
-                    'model' => 'gpt-5.4-mini',
+                    'model' => 'grok-4.5',
                     'format' => 'openai',
                     'key' => '<CHAT_FALLBACK_API_KEY>',
                     'max_tokens' => 1024,
@@ -28,7 +28,7 @@ return [
             ],
         ],
         'gen' => [
-            'model' => 'Qwen/Qwen3.6-35B-A3B',
+            'model' => 'grok-4.5',
             'format' => 'openai',
             'key' => '<GEN_API_KEY>',
             'max_tokens' => 16384,
@@ -38,7 +38,7 @@ return [
             'fallbacks' => [
                 [
                     'base_url' => 'https://api.3s3.org',
-                    'model' => 'gpt-5.4',
+                    'model' => 'gpt-5.6',
                     'format' => 'openai',
                     'key' => '<GEN_FALLBACK_API_KEY>',
                     'max_tokens' => 16384,

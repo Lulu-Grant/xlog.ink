@@ -24,14 +24,14 @@ function xlog_default_config() {
             'base_url' => getenv('XLOG_AI_BASE_URL') ?: 'https://api.3s3.org',
             'chat' => [
                 'base_url' => getenv('XLOG_CHAT_BASE_URL') ?: 'https://api.3s3.org',
-                'model' => getenv('XLOG_CHAT_MODEL') ?: 'google/gemma-4-E4B-it',
+                'model' => getenv('XLOG_CHAT_MODEL') ?: 'gpt-5.4-mini',
                 'format' => getenv('XLOG_CHAT_FORMAT') ?: 'openai',
                 'key' => getenv('XLOG_CHAT_API_KEY') ?: '',
                 'max_tokens' => 1024,
                 'fallbacks' => [
                     [
                         'base_url' => getenv('XLOG_CHAT_FALLBACK_BASE_URL') ?: 'https://api.3s3.org',
-                        'model' => getenv('XLOG_CHAT_FALLBACK_MODEL') ?: 'gpt-5.4-mini',
+                        'model' => getenv('XLOG_CHAT_FALLBACK_MODEL') ?: 'grok-4.5',
                         'format' => getenv('XLOG_CHAT_FALLBACK_FORMAT') ?: 'openai',
                         'key' => getenv('XLOG_CHAT_FALLBACK_API_KEY') ?: '',
                         'max_tokens' => 1024,
@@ -40,7 +40,7 @@ function xlog_default_config() {
             ],
             'gen' => [
                 'base_url' => getenv('XLOG_GEN_BASE_URL') ?: 'https://api.3s3.org',
-                'model' => getenv('XLOG_GEN_MODEL') ?: 'Qwen/Qwen3.6-35B-A3B',
+                'model' => getenv('XLOG_GEN_MODEL') ?: 'grok-4.5',
                 'format' => getenv('XLOG_GEN_FORMAT') ?: 'openai',
                 'key' => getenv('XLOG_GEN_API_KEY') ?: '',
                 'max_tokens' => 16384,
@@ -50,7 +50,7 @@ function xlog_default_config() {
                 'fallbacks' => [
                     [
                         'base_url' => getenv('XLOG_GEN_FALLBACK_BASE_URL') ?: 'https://api.3s3.org',
-                        'model' => getenv('XLOG_GEN_FALLBACK_MODEL') ?: 'gpt-5.4',
+                        'model' => getenv('XLOG_GEN_FALLBACK_MODEL') ?: 'gpt-5.6',
                         'format' => getenv('XLOG_GEN_FALLBACK_FORMAT') ?: 'openai',
                         'key' => getenv('XLOG_GEN_FALLBACK_API_KEY') ?: '',
                         'max_tokens' => 16384,

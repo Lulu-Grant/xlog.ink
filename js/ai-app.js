@@ -24,6 +24,7 @@
   var messages = $('#messages');
   var input = $('#messageInput');
   var sendBtn = document.querySelector('#composer button[type="submit"]');
+  var newSessionBtn = $('#newSessionToggle');
 
   function updateAppViewportHeight() {
     var height = (!isIOS && window.visualViewport && window.visualViewport.height) ? window.visualViewport.height : window.innerHeight;
@@ -104,6 +105,7 @@
   function setBusy(busy) {
     state.busy = busy;
     if (sendBtn) sendBtn.disabled = busy;
+    if (newSessionBtn) newSessionBtn.disabled = busy;
   }
 
   function normalizeLocale(value) {
@@ -149,6 +151,14 @@
     card.dataset.disabled = '1';
     Array.prototype.forEach.call(card.querySelectorAll('button, input'), function (el) {
       el.disabled = true;
+    });
+  }
+
+  function enableCard(card) {
+    if (!card) return;
+    card.dataset.disabled = '0';
+    Array.prototype.forEach.call(card.querySelectorAll('button, input'), function (el) {
+      el.disabled = false;
     });
   }
 
@@ -212,6 +222,56 @@
       '<button type="button" class="ghost-btn" data-continue-chat="1">' + escapeHtml(t('continueChat')) + '</button>' +
       '</div>');
     renderInlineTurnstile(state.publishCard);
+  }
+
+  function showNewSessionCard() {
+    var existing = document.querySelector('.new-session-card[data-active="1"]');
+    if (existing) {
+      scrollDown(true);
+      return;
+    }
+    var card = addActionCard('new-session-card',
+      '<div class="action-title">' + escapeHtml(t('newSessionTitle')) + '</div>' +
+      '<p>' + escapeHtml(t('newSessionBody')) + '</p>' +
+      '<div class="inline-actions">' +
+      '<button type="button" class="publish-btn" data-confirm-new-session="1">' + escapeHtml(t('confirmNewSession')) + '</button>' +
+      '<button type="button" class="ghost-btn" data-cancel-new-session="1">' + escapeHtml(t('cancelNewSession')) + '</button>' +
+      '</div>');
+    card.dataset.active = '1';
+    scrollDown(true);
+  }
+
+  function leaveEditRoute() {
+    state.editMode = '';
+    document.body.dataset.editSession = '';
+    try {
+      var url = new URL(window.location.href);
+      if (url.searchParams.has('edit_session')) {
+        url.searchParams.delete('edit_session');
+        window.history.replaceState({}, '', url.pathname + url.search + url.hash);
+      }
+    } catch (e) {}
+  }
+
+  function startNewSession(card) {
+    if (state.busy) return;
+    setBusy(true);
+    disableCard(card);
+    api('/api/session.php', { start_new: true }).then(function (data) {
+      applySessionPayload(data, true);
+      leaveEditRoute();
+      $('#accountBox').hidden = true;
+      toggleMyPages(false);
+      input.value = '';
+      autogrow();
+      input.focus();
+    }).catch(function () {
+      enableCard(card);
+      if (card) card.dataset.active = '1';
+      addMessage('system', t('newSessionFailed'));
+    }).finally(function () {
+      setBusy(false);
+    });
   }
 
   function renderInlineTurnstile(card) {
@@ -387,6 +447,7 @@
     else if (action.type === 'email') showEmailCard();
     else if (action.type === 'domain') showDomainCard(params);
     else if (action.type === 'image_gen') showImageGenCard(params);
+    else if (action.type === 'new_session') showNewSessionCard();
   }
 
   function addUploadCard(params) {
@@ -732,6 +793,7 @@
       return;
     }).finally(function () {
       ai.classList.remove('is-typing');
+      if (!ai.textContent.trim()) ai.remove();
       setBusy(false);
     });
   }
@@ -1022,6 +1084,20 @@
       sendMessage(promptBtn.dataset.prompt);
       return;
     }
+    var confirmNewSession = e.target.closest('button[data-confirm-new-session]');
+    if (confirmNewSession) {
+      var newSessionCard = confirmNewSession.closest('.new-session-card');
+      if (newSessionCard) newSessionCard.dataset.active = '0';
+      startNewSession(newSessionCard);
+      return;
+    }
+    var cancelNewSession = e.target.closest('button[data-cancel-new-session]');
+    if (cancelNewSession) {
+      var cancelledCard = cancelNewSession.closest('.new-session-card');
+      if (cancelledCard) cancelledCard.dataset.active = '0';
+      disableCard(cancelledCard);
+      return;
+    }
     var openPublish = e.target.closest('button[data-open-publish]');
     if (openPublish) {
       disableCard(openPublish.closest('.action-card'));
@@ -1133,6 +1209,7 @@
     var box = $('#accountBox');
     box.hidden = !box.hidden;
   });
+  if (newSessionBtn) newSessionBtn.addEventListener('click', showNewSessionCard);
   $('#myPagesToggle').addEventListener('click', function () { toggleMyPages(); });
   $('#closeMyPages').addEventListener('click', function () { toggleMyPages(false); });
   $('#myPagesList').addEventListener('click', function (e) {

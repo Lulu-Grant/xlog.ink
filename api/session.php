@@ -8,7 +8,8 @@ xlog_start_session();
 $data = json_input();
 $locale = resolve_locale($data['locale'] ?? null);
 set_locale_cookie($locale);
-$resumeId = trim($data['session_id'] ?? '');
+$startNew = !empty($data['start_new']);
+$resumeId = $startNew ? '' : trim($data['session_id'] ?? '');
 if ($resumeId !== '') {
     if (!preg_match('/^[a-f0-9]{32}$/', $resumeId)) api_error('bad_session', 'Invalid session');
     $session = db_one('SELECT * FROM sessions WHERE id = ?', [$resumeId]);

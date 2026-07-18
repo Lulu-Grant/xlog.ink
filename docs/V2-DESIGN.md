@@ -44,7 +44,7 @@
    生成前过 Turnstile + 额度检查
    │
    ▼
-⑤ 生成（Qwen/Qwen3.6-35B-A3B 驱动，gpt-5.4 备用）
+⑤ 生成（grok-4.5 驱动，gpt-5.6 备用）
    后端将整段对话历史 + 图片清单交给生成模型单次调用
    流式生成完整自由 HTML → 校验 → 落盘 /site/{slug}.html
    │
@@ -104,8 +104,8 @@
 | 前端 | 原生 JS 聊天 SPA（无框架） | 与现有项目风格一致，体积小 |
 | 后端 | PHP 8.x | 现有服务器 / Nginx / 部署链路全部就绪 |
 | 数据 | SQLite | 单机够用，零运维；从 pages.jsonl 迁移 |
-| 对话模型 | `google/gemma-4-E4B-it`，备用 `gpt-5.4-mini` | 便宜，承担引导与收集；备用保障可用性 |
-| 生成模型 | `Qwen/Qwen3.6-35B-A3B`，备用 `gpt-5.4` | 单次大输出，生成自由 HTML |
+| 对话模型 | `gpt-5.4-mini`，备用 `grok-4.5` | 承担语义引导、需求收集和动作标记；备用保障可用性 |
+| 生成模型 | `grok-4.5`，备用 `gpt-5.6` | 单次大输出，生成自由 HTML |
 | 模型网关 | `https://api.3s3.org` | 两个模型各用独立 API key |
 | 图片 | PHP GD（有 Imagick 则优先） | webp 转换 |
 | 邮件 | PHPMailer + 阿里云 DirectMail SMTPS | 验证码 / 修改链接 / 未来通知 |
@@ -118,9 +118,9 @@
    │ SSE 流式
    ▼
 ┌─ PHP 后端 ──────────────────────────────────────────┐
-│ api/chat.php      会话代理（gemma / gpt-5.4-mini，流式转发）│
+│ api/chat.php      会话代理（gpt-5.4-mini / grok-4.5，流式转发）│
 │ api/upload.php    图片上传 → webp                    │
-│ api/publish.php   生成流水线（Qwen / gpt-5.4）→ 落盘 → 分配 slug│
+│ api/publish.php   生成流水线（grok-4.5 / gpt-5.6）→ 落盘 → 分配 slug│
 │ api/auth/*.php    验证码登录                          │
 │ edit.php          token 鉴权修改入口                  │
 │ includes/ai.php   多模型适配层（anthropic/openai 双格式）│
@@ -132,8 +132,8 @@
    │                          │
    ▼                          ▼
 /site/{slug}.html      api.3s3.org
-/site-assets/{slug}/     ├ /v1/chat/completions (Qwen / gpt-5.4)
-   │                     └ /v1/chat/completions (gemma / gpt-5.4-mini)
+/site-assets/{slug}/     ├ /v1/chat/completions (grok-4.5 / gpt-5.6)
+   │                     └ /v1/chat/completions (gpt-5.4-mini / grok-4.5)
    ▼
 Nginx 通配符 *.xlog.ink → slug 映射（沿用现有机制）
 ```
@@ -147,27 +147,27 @@ Nginx 通配符 *.xlog.ink → slug 映射（沿用现有机制）
 'ai' => [
     'base_url' => 'https://api.3s3.org',
     'chat' => [
-        'model'  => 'google/gemma-4-E4B-it',
+        'model'  => 'gpt-5.4-mini',
         'format' => 'openai',
         'key'    => '<CHAT_API_KEY>',
         'max_tokens' => 1024,        // 每轮上限，省 token
         'fallbacks' => [[
             'base_url' => 'https://api.3s3.org',
-            'model' => 'gpt-5.4-mini',
+            'model' => 'grok-4.5',
             'format' => 'openai',
             'key' => '<CHAT_FALLBACK_API_KEY>',
             'max_tokens' => 1024,
         ]],
     ],
     'gen' => [
-        'model'  => 'Qwen/Qwen3.6-35B-A3B',
+        'model'  => 'grok-4.5',
         'format' => 'openai',
         'key'    => '<GEN_API_KEY>',
         'max_tokens' => 16384,       // 必须流式接收
         'stream' => true,
         'fallbacks' => [[
             'base_url' => 'https://api.3s3.org',
-            'model' => 'gpt-5.4',
+            'model' => 'gpt-5.6',
             'format' => 'openai',
             'key' => '<GEN_FALLBACK_API_KEY>',
             'max_tokens' => 16384,
@@ -442,6 +442,7 @@ GET  /api/auth/me.php          → { user: {email, daily_quota, used_today, cred
    - 上传图片：[[ACTION:UPLOAD slot=hero hint=活动主视觉]]
    - 信息足够生成：[[ACTION:READY reason=核心信息已完整]]
    - 引导留邮箱：[[ACTION:EMAIL]]
+   - 用户明确要求丢弃旧上下文并从零开始：[[ACTION:NEW_SESSION]]
    标记只作为 UI 信号，不向用户解释。
 
 【身份与额度】（由系统每轮注入最新值）
@@ -459,7 +460,8 @@ GET  /api/auth/me.php          → { user: {email, daily_quota, used_today, cred
 
 - 身份/额度行作为 system prompt 末尾动态段注入（每轮更新）。固定部分在前、动态部分在后，给将来切换支持 prompt caching 的模型留好前缀稳定性。
 - 历史截断：超过 30 轮时保留「前 2 轮 + 最近 20 轮」，中间替换为一行摘要占位。
-- `[[ACTION:...]]` 协议：后端在流转发时保留尾部缓冲，完成后剥离标记并发 `event: action`，前端按 `type` 分发 UI，用户永远不看到标记原文。
+- `[[ACTION:...]]` 协议：后端在流转发时保留尾部缓冲，从完整回复提取最后一个有效动作并剥离全部标记，再发 `event: action`；前端按 `type` 分发 UI，用户永远不看到标记原文。允许弱模型在标记后误吐少量文本而不丢动作。
+- 真正“重新开始”由 `NEW_SESSION` 或头部“+”进入同一确认卡；确认后 `POST /api/session.php {start_new:true}` 创建独立 session。旧消息、图片、页面、域名与编辑授权均不带入，但旧会话和已发布页面不删除。
 
 ### 5.2 生成触发为何不用 tool-calling
 
@@ -622,11 +624,12 @@ function consume_quota(string $kind /* generate|chat_turn */): array
 | 决策 | 结论 |
 |---|---|
 | 后端技术栈 | 继续 PHP，复用现有部署 |
-| 对话模型 | google/gemma-4-E4B-it，备用 gpt-5.4-mini（省 token + 可用性兜底） |
-| 生成模型 | Qwen/Qwen3.6-35B-A3B，备用 gpt-5.4，`/v1/chat/completions`，流式 |
+| 对话模型 | gpt-5.4-mini，备用 grok-4.5（语义判断 + 可用性兜底） |
+| 生成模型 | grok-4.5，备用 gpt-5.6，`/v1/chat/completions`，流式 |
 | 对话阶段工具调用 | 不用；会话模型输出内联动作标记 `[[ACTION:TYPE k=v]]` + 手动按钮双路径 |
 | 独立前置路由模型 | 不引入；避免每轮延迟叠加、成本倒挂和判断权错位 |
 | UI 唤起机制 | 语义路由由会话模型打 `UPLOAD/READY/EMAIL` 标记；确定性路由由前端事件直接响应 |
+| 新会话边界 | `NEW_SESSION` 语义动作 + 头部“+”确定性入口；确认后创建新 session，不清空或复用旧 session |
 | 标记剥离责任 | 后端流尾缓冲并剥离动作标记，前端只接收干净正文与 `action` SSE |
 | 生成前是否让弱模型总结简报 | 不总结，完整对话直接交给生成模型（避免丢信息） |
 | 登录方式 | 邮箱验证码（passwordless） |

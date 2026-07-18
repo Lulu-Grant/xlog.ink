@@ -7,8 +7,8 @@ xlog.ink V2 是一个 PHP 8 + SQLite + 原生 JS 的 AI 驱动个人页面快速
 ## 当前形态
 
 - 首页：`index.php`，Claude 风格 app shell，固定头部、固定底部输入框，中间聊天流滚动。
-- 对话模型：`google/gemma-4-26B-A4B-it`，通过 OpenAI 兼容 `/v1/chat/completions`。
-- 生成模型：`claude-sonnet-4-6`，通过 Anthropic 兼容 `/v1/messages`。
+- 对话模型：主模型 `gpt-5.4-mini`，备用 `grok-4.5`，通过 OpenAI 兼容 `/v1/chat/completions` 流式调用。
+- 生成模型：主模型 `grok-4.5`，备用 `gpt-5.6`，通过 OpenAI 兼容 `/v1/chat/completions` 流式调用。
 - 数据库：SQLite，默认 `data/xlog.db`，首次访问自动建表。
 - 分发：生成页写入 `site/{slug}.html`，配合 Nginx 通配符二级域名访问。
 - 资源：上传图片转 WebP，发布后放入 `site-assets/{slug}/`。

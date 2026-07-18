@@ -92,6 +92,26 @@ body {
   min-width: 0;
 }
 
+.new-session-btn {
+  width: 30px;
+  height: 30px;
+  flex: 0 0 30px;
+  display: inline-grid;
+  place-items: center;
+  padding: 0;
+  border: var(--bw) solid var(--line);
+  border-radius: 0;
+  background: transparent;
+  color: var(--muted);
+  font-size: 18px;
+  line-height: 1;
+}
+.new-session-btn:hover:not(:disabled) {
+  border-color: var(--acc);
+  background: var(--acc);
+  color: var(--panel);
+}
+
 button, input, textarea { font: inherit; letter-spacing: inherit; }
 button { cursor: pointer; }
 button:focus-visible, a:focus-visible, label:focus-visible {
@@ -595,6 +615,7 @@ button:disabled { cursor: default; opacity: .45; }
   border-color: var(--acc-deep);
 }
 .generate-card, .publish-confirm-card { border-color: var(--acc); }
+.new-session-card { border-color: var(--line-strong); }
 .generate-card .action-title::before, .generate-card .action-title::after,
 .publish-confirm-card .action-title::before, .publish-confirm-card .action-title::after { color: var(--acc); }
 .ghost-btn {
@@ -1235,6 +1256,12 @@ input:focus, textarea:focus { border-color: var(--acc); }
     height: 28px;
     padding: 0 6px;
     font-size: 12px;
+  }
+  .new-session-btn {
+    width: 26px;
+    height: 26px;
+    flex-basis: 26px;
+    font-size: 16px;
   }
   .login-panel {
     padding: 10px 12px;
