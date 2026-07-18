@@ -229,19 +229,6 @@ function generate_slug($outDir) {
     return ['slug' => $slug, 'file' => $file, 'path' => $path];
 }
 
-function record_page_index($slug, $title, $nowIso, $uiLang, $type, $isAdult = false) {
-    $indexFile = __DIR__ . '/../data/pages.jsonl';
-    $entry = json_encode([
-        'slug'  => $slug,
-        'title' => $title,
-        'time'  => $nowIso,
-        'lang'  => $uiLang,
-        'type'  => $type,
-        'adult' => (bool)$isAdult,
-    ], JSON_UNESCAPED_UNICODE);
-    @file_put_contents($indexFile, $entry . "\n", FILE_APPEND | LOCK_EX);
-}
-
 function excerpt_plain_text($text, $max = 120) {
     $text = preg_replace('/\s+/u', ' ', trim((string)$text));
     if ($text === '') return '';

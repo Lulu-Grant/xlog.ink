@@ -16,8 +16,13 @@ ratelimit/*.json
 data/ratelimit/
 data/php-sessions/
 data/previews/
+data/*.jsonl
 127.0.0.1.json
 sitemap.xml
+recent.html
+
+# Generated audit evidence (summary reports remain tracked)
+docs/dynamic-audit-evidence/
 
 # Generated pages and uploaded assets
 site/*

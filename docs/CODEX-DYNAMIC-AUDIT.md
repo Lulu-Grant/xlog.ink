@@ -120,13 +120,12 @@ recent.html | 25 +++++--------------------
  1 file changed, 5 insertions(+), 20 deletions(-)
 ```
 
-Note: `recent.html` appears in the current worktree diff but is pre-existing/unrelated to this dynamic audit pass. Audit fixes are `api/session.php`, `includes/imageproc.php`, and the untracked audit harness/report artifacts listed below.
-
-## Untracked Audit Artifacts
+## Audit Artifacts
 
 - `scripts/codex-dynamic-audit.js`
 - `docs/CODEX-DYNAMIC-AUDIT.md`
-- `docs/dynamic-audit-evidence/`
+
+Raw evidence is generated under `docs/dynamic-audit-evidence/` and intentionally ignored by Git. The reproducible harness and summary report remain tracked.
 
 Risk: changes are local only; no commit, push, or production access was performed.
 
