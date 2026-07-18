@@ -2,18 +2,16 @@
 
 xlog.ink V2 是一个 PHP 8 + SQLite + 原生 JS 的 AI 驱动个人页面快速创建与二级域名分发系统。
 
-用户打开首页后进入聊天式创建界面，由较弱模型负责需求引导，最终由强模型生成完整 HTML 页面，并发布到 `{slug}.xlog.ink`。系统支持图片上传转 WebP、页面截图预览、链接交付、邮箱修改 token、邮箱验证码登录、游客/注册用户额度、防滥用和 AI 成人内容审核。
+用户打开首页后进入聊天式创建界面，系统根据对话整理需求、生成完整 HTML 页面，并发布到 `{slug}.xlog.ink`。系统支持图片上传转 WebP、页面截图预览、链接交付、邮箱修改 token、邮箱验证码登录、游客/注册用户额度、防滥用和成人内容审核。
 
 ## 当前形态
 
 - 首页：`index.php`，Claude 风格 app shell，固定头部、固定底部输入框，中间聊天流滚动。
-- 对话模型：主模型 `gpt-5.4-mini`，备用 `grok-4.5`，通过 OpenAI 兼容 `/v1/chat/completions` 流式调用。
-- 生成模型：主模型 `grok-4.5`，备用 `gpt-5.6`，通过 OpenAI 兼容 `/v1/chat/completions` 流式调用。
 - 数据库：SQLite，默认 `data/xlog.db`，首次访问自动建表。
 - 分发：生成页写入 `site/{slug}.html`，配合 Nginx 通配符二级域名访问。
 - 资源：上传图片转 WebP，发布后放入 `site-assets/{slug}/`。
 
-真实 API key、SMTP 密码、Turnstile key 不进入仓库，只放服务器 `/etc/xlog/config.php`。
+运行时凭据不进入仓库。
 
 ## 关键目录
 
