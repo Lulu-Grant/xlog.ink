@@ -50,6 +50,7 @@ body {
 }
 
 .app-window {
+  position: relative;
   width: min(750px, 100%);
   height: 100%;
   min-width: 0;
@@ -57,6 +58,8 @@ body {
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  /* Isolate drawer transform so slide does not reflow/shift the chat column. */
+  contain: layout paint;
   border-left: var(--bw) solid var(--line);
   border-right: var(--bw) solid var(--line);
   border-radius: 0;
@@ -138,6 +141,16 @@ button:disabled { cursor: default; opacity: .45; }
   border-color: var(--line);
   color: var(--muted);
 }
+.quota-pill.is-clickable {
+  cursor: pointer;
+  border-color: var(--line-strong);
+  color: var(--ink);
+}
+.quota-pill.is-clickable:hover {
+  background: var(--acc);
+  border-color: var(--acc);
+  color: var(--panel);
+}
 .login-btn::before { content: "[ "; }
 .login-btn::after { content: " ]"; }
 .login-btn:hover {
@@ -181,15 +194,14 @@ button:disabled { cursor: default; opacity: .45; }
   color: var(--panel);
 }
 
-.login-panel {
-  flex: 0 0 auto;
-  position: relative;
-  z-index: 9;
+/* Login / account content lives inside the right drawer (not a top strip). */
+.login-panel,
+.login-panel.drawer-login {
   display: grid;
-  gap: 8px;
-  padding: 12px 16px;
-  border-bottom: var(--bw) solid var(--line-strong);
+  gap: 10px;
+  padding: 0;
   background: transparent;
+  border: 0;
 }
 .login-panel[hidden] { display: none; }
 .login-step {
@@ -229,19 +241,271 @@ button:disabled { cursor: default; opacity: .45; }
   font-size: 12.5px;
   color: var(--ink);
 }
+.account-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  justify-content: space-between;
+}
+.account-row .account-email {
+  flex: 1 1 140px;
+}
+.account-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+.account-row button,
+.login-step button.secondary {
+  min-height: 36px;
+  padding: 0 12px;
+  border: var(--bw) solid var(--line-strong);
+  border-radius: 0;
+  background: transparent;
+  color: var(--ink);
+  font-size: 12.5px;
+  white-space: nowrap;
+}
+.account-row button::before,
+.login-step button.secondary::before { content: "[ "; }
+.account-row button::after,
+.login-step button.secondary::after { content: " ]"; }
+.account-row button:hover:not(:disabled),
+.login-step button.secondary:hover:not(:disabled) {
+  background: var(--acc);
+  border-color: var(--acc);
+  color: var(--panel);
+}
+.account-row button.secondary,
+.login-step button.secondary {
+  border-color: var(--line);
+  color: var(--muted);
+}
 
-.my-pages-panel {
-  flex: 0 0 auto;
-  position: relative;
-  z-index: 9;
+.buy-credits-panel,
+.buy-credits-panel.drawer-credits {
   width: 100%;
-  max-height: 280px;
-  overflow: auto;
-  padding: 12px 16px 14px;
-  border-bottom: var(--bw) solid var(--line-strong);
+  max-height: none;
+  overflow: visible;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+.buy-credits-panel[hidden] { display: none; }
+.buy-credits-hint {
+  margin: 0 0 10px;
+  color: var(--muted);
+  font-size: 12.5px;
+}
+.buy-credits-list {
+  display: grid;
+  gap: 8px;
+}
+.buy-credits-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, auto);
+  gap: 8px;
+  align-items: center;
+  padding: 10px 12px;
+  border: var(--bw) solid var(--line);
+  background: var(--panel);
+}
+.buy-credits-item strong {
+  font-size: 13px;
+}
+.buy-credits-item .price {
+  color: var(--muted);
+  font-size: 12.5px;
+}
+.buy-credits-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  justify-content: flex-end;
+}
+.buy-credits-item button {
+  min-height: 32px;
+  padding: 0 10px;
+  border: var(--bw) solid var(--line-strong);
+  border-radius: 0;
+  background: transparent;
+  color: var(--ink);
+  font-size: 12px;
+  white-space: nowrap;
+}
+.buy-credits-item button:hover:not(:disabled) {
+  background: var(--acc);
+  border-color: var(--acc);
+  color: var(--panel);
+}
+.buy-credits-pay-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 10px;
+}
+.buy-credits-pay-row button {
+  min-height: 32px;
+  padding: 0 12px;
+  border: var(--bw) solid var(--line-strong);
+  background: transparent;
+  color: var(--ink);
+  font-size: 12.5px;
+}
+.buy-credits-pay-row button:hover:not(:disabled) {
+  background: var(--acc);
+  border-color: var(--acc);
+  color: var(--panel);
+}
+.buy-credits-status {
+  color: var(--muted);
+  font-size: 12px;
+}
+.action-card.recharge-card {
+  border-color: var(--line-strong);
+}
+.action-card.recharge-card p {
+  margin: 0 0 10px;
+  color: var(--muted);
+  font-size: 12.5px;
+}
+
+.my-pages-panel,
+.my-pages-panel.drawer-pages {
+  width: 100%;
+  max-height: none;
+  overflow: visible;
+  padding: 0;
+  border: 0;
   background: transparent;
 }
 .my-pages-panel[hidden] { display: none; }
+
+/* —— Right account/credits drawer (overlay) —— */
+.drawer-backdrop {
+  position: absolute;
+  inset: 0;
+  z-index: 35;
+  background: rgba(31, 30, 29, 0.35);
+  border: 0;
+  cursor: pointer;
+}
+.drawer-backdrop[hidden] { display: none !important; }
+.app-drawer {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 40;
+  width: min(360px, 92%);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border-left: var(--bw) solid var(--line-strong);
+  background: var(--panel);
+  /* translate3d keeps animation on compositor; no layout effect on siblings */
+  transform: translate3d(100%, 0, 0);
+  transition: transform .22s ease;
+  pointer-events: none;
+  will-change: transform;
+  backface-visibility: hidden;
+}
+.app-drawer.is-open {
+  transform: translate3d(0, 0, 0);
+  pointer-events: auto;
+}
+.app-drawer[hidden] { display: none !important; }
+.app-drawer.is-open[hidden] { display: flex !important; }
+.drawer-head {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 50px;
+  padding: 10px 12px;
+  border-bottom: var(--bw) solid var(--line-strong);
+  background: var(--panel);
+}
+.drawer-head strong {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 13px;
+  font-weight: 700;
+}
+.drawer-head strong::before { content: "┌ "; color: var(--muted); }
+.drawer-head strong::after { content: " ┐"; color: var(--muted); }
+.drawer-back {
+  flex: 0 0 auto;
+  min-height: 28px;
+  padding: 0 8px;
+  border: var(--bw) solid var(--line);
+  background: transparent;
+  color: var(--muted);
+  font-size: 12px;
+  white-space: nowrap;
+}
+.drawer-back:hover {
+  border-color: var(--acc);
+  background: var(--acc);
+  color: var(--panel);
+}
+.drawer-back[hidden] { display: none !important; }
+#closeDrawer {
+  flex: 0 0 auto;
+  width: 28px;
+  height: 28px;
+  border: var(--bw) solid var(--line);
+  background: transparent;
+  color: var(--muted);
+  font-size: 16px;
+  line-height: 1;
+}
+#closeDrawer:hover {
+  background: var(--acc);
+  border-color: var(--acc);
+  color: var(--panel);
+}
+.drawer-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  padding: 14px 16px 20px;
+  -webkit-overflow-scrolling: touch;
+}
+.drawer-view { display: grid; gap: 12px; }
+.drawer-view[hidden] { display: none !important; }
+.account-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+  width: 100%;
+}
+.account-row {
+  display: grid;
+  gap: 14px;
+}
+.account-row .account-email {
+  flex: none;
+  font-size: 13px;
+  word-break: break-all;
+  white-space: normal;
+}
+.account-actions button {
+  width: 100%;
+  justify-content: center;
+}
+/* Mobile only: lock background scroll under fixed overlay.
+   Do not toggle body overflow on PC — it can nudge the centered .app-window. */
+body.drawer-open {
+  overflow: hidden;
+  touch-action: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .app-drawer { transition: none; will-change: auto; }
+}
 .panel-head {
   display: flex;
   align-items: center;
@@ -1264,7 +1528,17 @@ input:focus, textarea:focus { border-color: var(--acc); }
     font-size: 16px;
   }
   .login-panel {
-    padding: 10px 12px;
+    padding: 0;
+  }
+  /* Mobile: fixed overlay above chat + composer */
+  .drawer-backdrop,
+  .app-drawer {
+    position: fixed;
+  }
+  .app-drawer {
+    width: min(100vw - 48px, 360px);
+    max-height: var(--app-vh, 100dvh);
+    padding-bottom: env(safe-area-inset-bottom, 0);
   }
   .messages.is-hero .preset-row {
     justify-content: center;

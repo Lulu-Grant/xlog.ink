@@ -1,5 +1,6 @@
 <?php
 require_once __DIR__ . '/../../includes/mailer.php';
+require_once __DIR__ . '/../../includes/page_edit.php';
 
 require_method('POST');
 xlog_start_session();
@@ -21,9 +22,37 @@ db_exec('DELETE FROM login_codes WHERE email = ?', [$email]);
 
 $user = db_one('SELECT * FROM users WHERE email = ?', [$email]);
 if (!$user) {
-    db_exec('INSERT INTO users (email, created_at) VALUES (?, ?)', [$email, now_iso()]);
+    $signupCredits = max(0, (int)xlog_config('billing.signup_credits', 10));
+    $dailyQuota = max(0, (int)xlog_config('billing.signup_daily_quota', 10));
+    db_exec(
+        'INSERT INTO users (email, created_at, daily_quota, credits, status) VALUES (?, ?, ?, ?, ?)',
+        [$email, now_iso(), $dailyQuota, $signupCredits, 'active']
+    );
     $user = db_one('SELECT * FROM users WHERE email = ?', [$email]);
+    if ($user && $signupCredits > 0) {
+        db_exec(
+            'INSERT INTO credit_transactions (user_id, delta, reason, ref, created_at) VALUES (?, ?, ?, ?, ?)',
+            [(int)$user['id'], $signupCredits, 'signup_bonus', null, now_iso()]
+        );
+    }
+}
+// AUDIT-8 P2-1: disabled/suspended users must not obtain a session.
+if (!$user || (string)($user['status'] ?? '') !== 'active') {
+    api_error('account_disabled', t('api', 'accountDisabled', $locale) ?: 'Account disabled', 403);
 }
 session_regenerate_id(true);
 $_SESSION['user_id'] = (int)$user['id'];
-api_json(['user' => ['id' => (int)$user['id'], 'email' => $user['email'], 'daily_quota' => (int)$user['daily_quota'], 'credits' => (int)$user['credits']]]);
+
+// G2/G8/G10: bind active session and claim eligible guest pages.
+$sessionId = trim((string)($data['session_id'] ?? ''));
+$claims = claim_pages_after_login((int)$user['id'], $sessionId !== '' ? $sessionId : null, $email);
+
+api_json([
+    'user' => [
+        'id' => (int)$user['id'],
+        'email' => $user['email'],
+        'daily_quota' => (int)$user['daily_quota'],
+        'credits' => (int)$user['credits'],
+    ],
+    'claims' => $claims,
+]);

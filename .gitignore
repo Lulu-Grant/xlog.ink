@@ -1,6 +1,8 @@
 .DS_Store
 *.log
 *.tmp
+scripts/_tmp_*
+scripts/_tmp*/
 
 # Local agent/editor state
 .claude/
@@ -17,6 +19,7 @@ data/ratelimit/
 data/php-sessions/
 data/previews/
 data/*.jsonl
+data/reports/
 127.0.0.1.json
 sitemap.xml
 recent.html

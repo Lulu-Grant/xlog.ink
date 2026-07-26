@@ -21,12 +21,16 @@ function db() {
 
 function db_init(PDO $pdo) {
     $pdo->exec("
+CREATE TABLE IF NOT EXISTS schema_migrations (
+    version TEXT PRIMARY KEY,
+    applied_at TEXT NOT NULL
+);
 CREATE TABLE IF NOT EXISTS users (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     email TEXT NOT NULL UNIQUE,
     created_at TEXT NOT NULL,
-    daily_quota INTEGER NOT NULL DEFAULT 50,
-    credits INTEGER NOT NULL DEFAULT 0,
+    daily_quota INTEGER NOT NULL DEFAULT 10,
+    credits INTEGER NOT NULL DEFAULT 10,
     status TEXT NOT NULL DEFAULT 'active'
 );
 CREATE TABLE IF NOT EXISTS login_codes (
@@ -111,9 +115,16 @@ CREATE TABLE IF NOT EXISTS orders (
     credits INTEGER NOT NULL,
     status TEXT NOT NULL DEFAULT 'pending',
     pay_channel TEXT,
+    package_id TEXT DEFAULT '',
+    trade_no TEXT DEFAULT '',
+    pay_url TEXT DEFAULT '',
+    client_ip TEXT DEFAULT '',
+    notify_raw TEXT DEFAULT '',
     created_at TEXT NOT NULL,
     paid_at TEXT
 );
+CREATE INDEX IF NOT EXISTS idx_orders_user_created ON orders(user_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_orders_status ON orders(status);
 CREATE TABLE IF NOT EXISTS publish_events (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     session_id TEXT,
@@ -159,6 +170,23 @@ CREATE TABLE IF NOT EXISTS admin_login_attempts (
     created_at TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_admin_login_attempts_lookup ON admin_login_attempts(ip_hash, success, created_at);
+CREATE TABLE IF NOT EXISTS pay_channels (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    pay_type TEXT NOT NULL,
+    driver TEXT NOT NULL DEFAULT 'epay_v1_md5',
+    api_base TEXT NOT NULL,
+    pid TEXT NOT NULL,
+    md5_key TEXT DEFAULT '',
+    merchant_private_key TEXT DEFAULT '',
+    platform_public_key TEXT DEFAULT '',
+    method TEXT DEFAULT 'jump',
+    enabled INTEGER NOT NULL DEFAULT 1,
+    sort_order INTEGER NOT NULL DEFAULT 100,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_pay_channels_enabled ON pay_channels(enabled, sort_order);
 ");
     db_ensure_column($pdo, 'sessions', 'edit_mode', "TEXT NOT NULL DEFAULT ''");
     db_ensure_column($pdo, 'sessions', 'client_id', "TEXT DEFAULT ''");
@@ -178,6 +206,51 @@ CREATE INDEX IF NOT EXISTS idx_admin_login_attempts_lookup ON admin_login_attemp
     db_ensure_column($pdo, 'pages', 'og_image_path', "TEXT DEFAULT ''");
     db_ensure_column($pdo, 'pages', 'screenshot_path', "TEXT DEFAULT ''");
     db_ensure_column($pdo, 'pages', 'slug_source', "TEXT DEFAULT ''");
+    db_ensure_column($pdo, 'orders', 'package_id', "TEXT DEFAULT ''");
+    db_ensure_column($pdo, 'orders', 'trade_no', "TEXT DEFAULT ''");
+    db_ensure_column($pdo, 'orders', 'pay_url', "TEXT DEFAULT ''");
+    db_ensure_column($pdo, 'orders', 'client_ip', "TEXT DEFAULT ''");
+    db_ensure_column($pdo, 'orders', 'notify_raw', "TEXT DEFAULT ''");
+    db_ensure_column($pdo, 'orders', 'channel_id', "TEXT DEFAULT ''");
+    // AUDIT-8 P2-2: optional secret_ref column (actual secrets may live outside SQLite).
+    db_ensure_column($pdo, 'pay_channels', 'secret_ref', "TEXT DEFAULT ''");
+
+    // AUDIT-8 P2-3: apply versioned migrations after baseline schema.
+    db_apply_migrations($pdo);
+}
+
+/**
+ * Run pending PHP migrations from migrations/*.php (AUDIT-8 P2-3).
+ * Each file returns a version string and applies upgrades idempotently.
+ */
+function db_apply_migrations(PDO $pdo) {
+    $dir = dirname(__DIR__) . '/migrations';
+    if (!is_dir($dir)) {
+        // Record baseline even when no migration files yet.
+        $stmt = $pdo->prepare('INSERT OR IGNORE INTO schema_migrations (version, applied_at) VALUES (?, ?)');
+        $stmt->execute(['001_baseline', gmdate('c')]);
+        return;
+    }
+    $files = glob($dir . '/*.php') ?: [];
+    sort($files, SORT_STRING);
+    foreach ($files as $file) {
+        $meta = require $file;
+        if (!is_array($meta) || empty($meta['version']) || !is_callable($meta['up'] ?? null)) {
+            continue;
+        }
+        $version = (string)$meta['version'];
+        $exists = $pdo->prepare('SELECT version FROM schema_migrations WHERE version = ?');
+        $exists->execute([$version]);
+        if ($exists->fetch()) {
+            continue;
+        }
+        $meta['up']($pdo);
+        $ins = $pdo->prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)');
+        $ins->execute([$version, gmdate('c')]);
+    }
+    // Ensure baseline marker exists for empty migration dirs that only use db_ensure_column.
+    $stmt = $pdo->prepare('INSERT OR IGNORE INTO schema_migrations (version, applied_at) VALUES (?, ?)');
+    $stmt->execute(['001_baseline', gmdate('c')]);
 }
 
 function db_ensure_column(PDO $pdo, $table, $column, $definition) {

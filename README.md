@@ -96,6 +96,11 @@ location ~ /\.(?!well-known) { return 404; }
 - `POST /api/auth/verify.php`
 - `POST /api/auth/logout.php`
 - `POST /api/auth/me.php`
+- `POST /api/pay/packages.php`  积分套餐
+- `POST /api/pay/create.php`    创建充值订单（需登录）
+- `POST /api/pay/status.php`    查询订单并补发积分
+- `GET|POST /api/pay/notify.php` 支付异步通知（返回 plain `success`）
+- `GET|POST /api/pay/return.php` 支付浏览器回跳
 
 ## 测试与诊断
 
@@ -103,6 +108,7 @@ location ~ /\.(?!well-known) { return 404; }
 find . -name '*.php' -not -path './vendor/*' -print0 | xargs -0 -n1 php -l
 php scripts/diagnose-config.php
 php scripts/cost-report.php
+php scripts/test-pay-quota.php   # packages, free-tier, fulfill idempotency, notify log
 ```
 
 ## 不提交内容

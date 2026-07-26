@@ -108,9 +108,38 @@ function xlog_default_config() {
         'billing' => [
             'credit_mode' => false,
             'generate_credit_cost' => 1,
+            // Guest free daily page generations (quota counter, not wallet credits).
+            'guest_generate_quota' => 5,
+            // Free wallet credits granted once on first registration.
+            'signup_credits' => 10,
+            // Legacy users.daily_quota seed; ignored for generate when credit_mode is true.
+            'signup_daily_quota' => 10,
+            // When wallet credits < cost, allow this many free generations/day (G1 A1). 0 = off.
+            'user_fallback_daily_generate' => 2,
+            // amount_cents is RMB fen; min platform amount is 100 (= ¥1.00)
+            'packages' => [
+                ['id' => 'c10', 'credits' => 10, 'amount_cents' => 1000],
+                ['id' => 'c30', 'credits' => 30, 'amount_cents' => 2800],
+                ['id' => 'c100', 'credits' => 100, 'amount_cents' => 8800],
+                ['id' => 'c500', 'credits' => 500, 'amount_cents' => 39800],
+            ],
+        ],
+        'pay' => [
+            'enabled' => true,
+            'api_base' => getenv('XLOG_PAY_API_BASE') ?: 'https://api.xuanfanpay.top',
+            'pid' => getenv('XLOG_PAY_PID') ?: '',
+            'merchant_private_key' => getenv('XLOG_PAY_MERCHANT_PRIVATE_KEY') ?: '',
+            'platform_public_key' => getenv('XLOG_PAY_PLATFORM_PUBLIC_KEY') ?: '',
+            // V1 MD5 key kept for diagnostics only; V2 uses RSA.
+            'md5_key' => getenv('XLOG_PAY_MD5_KEY') ?: '',
+            'default_type' => getenv('XLOG_PAY_TYPE') ?: 'alipay',
+            'method' => getenv('XLOG_PAY_METHOD') ?: 'jump',
+            'notify_url' => getenv('XLOG_PAY_NOTIFY_URL') ?: '',
+            'return_url' => getenv('XLOG_PAY_RETURN_URL') ?: '',
         ],
         'admin' => [
             'token' => getenv('XLOG_ADMIN_TOKEN') ?: '',
+            'allow_credit_grant' => false,
             'max_attempts' => (int)(getenv('XLOG_ADMIN_MAX_ATTEMPTS') ?: 8),
             'lock_seconds' => (int)(getenv('XLOG_ADMIN_LOCK_SECONDS') ?: 900),
         ],
@@ -172,6 +201,26 @@ function xlog_ensure_dirs() {
     }
 }
 
+/**
+ * HTTPS detection for cookies/base URL. Trusts X-Forwarded-Proto only when
+ * REMOTE_ADDR is in trusted proxy list (AUDIT-7 P2-9).
+ */
+function request_is_https() {
+    if (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off' && $_SERVER['HTTPS'] !== '0') {
+        return true;
+    }
+    if (isset($_SERVER['SERVER_PORT']) && (int)$_SERVER['SERVER_PORT'] === 443) {
+        return true;
+    }
+    $remote = $_SERVER['REMOTE_ADDR'] ?? '';
+    if ($remote !== '' && function_exists('request_comes_from_trusted_proxy') && request_comes_from_trusted_proxy($remote)) {
+        $proto = strtolower((string)($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? ''));
+        if ($proto === 'https') return true;
+        if (strtolower((string)($_SERVER['HTTP_X_FORWARDED_SSL'] ?? '')) === 'on') return true;
+    }
+    return false;
+}
+
 function xlog_start_session() {
     if (session_status() === PHP_SESSION_ACTIVE) return;
     $sessionDir = rtrim(xlog_config('data_dir'), '/') . '/php-sessions';
@@ -180,7 +229,7 @@ function xlog_start_session() {
     }
     @ini_set('session.save_handler', 'files');
     @ini_set('session.save_path', $sessionDir);
-    $secure = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on');
+    $secure = request_is_https();
     session_set_cookie_params([
         'lifetime' => 60 * 60 * 24 * 30,
         'path' => '/',
@@ -192,9 +241,53 @@ function xlog_start_session() {
     session_start();
 }
 
+/**
+ * Active logged-in user id, or null.
+ * AUDIT-8 P2-1: non-active users cannot keep a valid identity.
+ */
 function current_user_id() {
     xlog_start_session();
-    return isset($_SESSION['user_id']) ? (int)$_SESSION['user_id'] : null;
+    if (!isset($_SESSION['user_id'])) {
+        return null;
+    }
+    $id = (int)$_SESSION['user_id'];
+    if ($id <= 0) {
+        return null;
+    }
+    // Lazy status check (cached per request). db.php may not be loaded yet.
+    static $cache = [];
+    if (array_key_exists($id, $cache)) {
+        return $cache[$id];
+    }
+    if (!function_exists('db_one')) {
+        // Session present but DB helpers not loaded — trust session until db is available.
+        return $id;
+    }
+    try {
+        $row = db_one('SELECT id, status FROM users WHERE id = ?', [$id]);
+    } catch (Throwable $e) {
+        // DB not ready — treat as logged out for safety on sensitive paths after load.
+        $cache[$id] = null;
+        return null;
+    }
+    if (!$row || (string)($row['status'] ?? '') !== 'active') {
+        unset($_SESSION['user_id']);
+        $cache[$id] = null;
+        return null;
+    }
+    $cache[$id] = $id;
+    return $id;
+}
+
+/**
+ * Full user row for the active session user, or null.
+ */
+function current_user() {
+    $id = current_user_id();
+    if (!$id || !function_exists('db_one')) {
+        return null;
+    }
+    return db_one('SELECT * FROM users WHERE id = ? AND status = ?', [$id, 'active']);
 }
 
 function xlog_cookie_id() {
@@ -203,7 +296,7 @@ function xlog_cookie_id() {
         return $_COOKIE[$name];
     }
     $cid = bin2hex(random_bytes(16));
-    $secure = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on');
+    $secure = request_is_https();
     setcookie($name, $cid, [
         'expires' => time() + 86400 * 365,
         'path' => '/',

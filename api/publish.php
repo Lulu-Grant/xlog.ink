@@ -94,8 +94,19 @@ try {
     $quotaCharge = consume_quota('generate');
     if (!$quotaCharge['ok']) {
         restore_publish_session_state($sessionId, $previousState, $generationLocked);
-        record_publish_event($sessionId, $session['page_slug'] ?: null, 'generate', 'failed', 'quota_exceeded');
-        sse_event('error', ['code' => 'quota_exceeded', 'message' => t('api', 'quotaExceeded', $locale)]);
+        $quotaReason = (string)($quotaCharge['reason'] ?? 'daily_quota_exceeded');
+        $isCredits = $quotaReason === 'credits_exhausted';
+        $errorCode = $isCredits ? 'credits_exhausted' : 'quota_exceeded';
+        record_publish_event($sessionId, $session['page_slug'] ?: null, 'generate', 'failed', $errorCode);
+        sse_event('error', [
+            'code' => $errorCode,
+            'reason' => $quotaReason,
+            'identity' => $quotaCharge['identity'] ?? null,
+            'message' => $isCredits
+                ? t('api', 'creditsExhausted', $locale)
+                : t('api', 'quotaExceeded', $locale),
+            'can_recharge' => $isCredits || (($quotaCharge['identity'] ?? '') === 'user'),
+        ]);
         exit;
     }
 
@@ -124,6 +135,8 @@ try {
     }
 
     $html = extract_html_document($raw);
+    require_once __DIR__ . '/../includes/html_sanitize.php';
+    $html = xlog_sanitize_generated_html($html);
     validate_generated_html($html);
     $htmlModeration = assess_adult_text_with_ai(html_entity_decode(strip_tags($html), ENT_QUOTES | ENT_HTML5, 'UTF-8'));
     $adult = merge_moderation_results([$adult, $htmlModeration]);
@@ -143,10 +156,16 @@ try {
     }
     $title = extract_title($html) ?: 'AI Page';
     $desiredSlug = trim((string)($session['desired_slug'] ?? ''));
-    $slugResult = $editPage
-        ? ['slug' => $session['page_slug'], 'source' => 'edit']
-        : generate_semantic_slug($generationMessages, $title, $desiredSlug);
-    $pageSlug = $slugResult['slug'];
+    // AUDIT-8 P1-1: edit uses existing slug only; create reserves via INSERT (never blind UPDATE).
+    if ($editPage) {
+        $slugResult = ['slug' => (string)$session['page_slug'], 'source' => 'edit'];
+        $pageSlug = $slugResult['slug'];
+    } else {
+        // Provisional slug for asset rewrite; final slug confirmed after INSERT reserve.
+        $provisional = generate_semantic_slug($generationMessages, $title, $desiredSlug);
+        $pageSlug = $provisional['slug'];
+        $slugResult = $provisional;
+    }
     $html = move_session_assets_to_slug($sessionId, $pageSlug, $html);
     $isAdult = !empty($adult['is_adult']);
     $adultFlagCleared = $editPage && !empty($editPage['is_adult']) && !$isAdult;
@@ -164,29 +183,67 @@ try {
         $html = inject_adult_gate($html, $pageSlug, normalize_locale(extract_html_lang($html)) ?: $locale);
     }
     $html = inject_generated_csp($html);
-    $html = inject_generated_footer($html, $pageSlug);
+    $pageLang = normalize_locale(extract_html_lang($html)) ?: $locale;
+    $html = inject_generated_footer($html, $pageSlug, $pageLang);
 
     sse_event('stage', ['stage' => 'writing']);
-    $path = xlog_config('site_dir') . '/' . $pageSlug . '.html';
-    if (file_put_contents($path, $html, LOCK_EX) === false) {
-        throw new RuntimeException('Write failed');
-    }
-
     $screenshotPath = '';
     $type = infer_page_type($generationMessages);
     $lang = normalize_locale(extract_html_lang($html)) ?: $locale;
     $now = now_iso();
     $cost = (int)(($usage['input_tokens'] ?? 0) + ($usage['output_tokens'] ?? 0));
-    if (db_one('SELECT slug FROM pages WHERE slug = ?', [$pageSlug])) {
-        db_exec(
-            'UPDATE pages SET title = ?, type = ?, lang = ?, updated_at = ?, cost_tokens = ?, session_id = ?, html_path = ?, is_adult = ?, adult_score = ?, adult_reason = ?, og_image_path = ?, screenshot_path = ?, slug_source = ? WHERE slug = ?',
-            [$title, $type, $lang, $now, $cost, $sessionId, $path, $isAdult ? 1 : 0, $adult['score'], $adult['reason'], $ogImagePath, $screenshotPath ?: '', $slugResult['source'], $pageSlug]
-        );
+
+    if ($editPage) {
+        $path = rtrim((string)xlog_config('site_dir'), '/') . '/' . $pageSlug . '.html';
+        write_site_html_atomic($path, $html);
+        $updated = publish_update_edit_page($pageSlug, [
+            'title' => $title,
+            'type' => $type,
+            'lang' => $lang,
+            'updated_at' => $now,
+            'cost_tokens' => $cost,
+            'session_id' => $sessionId,
+            'html_path' => $path,
+            'is_adult' => $isAdult ? 1 : 0,
+            'adult_score' => $adult['score'],
+            'adult_reason' => $adult['reason'],
+            'og_image_path' => $ogImagePath,
+            'screenshot_path' => $screenshotPath ?: '',
+            'slug_source' => 'edit',
+        ]);
+        if ($updated < 1) {
+            throw new RuntimeException('Edit page update failed');
+        }
     } else {
-        db_exec(
-            'INSERT INTO pages (slug, title, type, lang, created_at, owner_user_id, status, cost_tokens, session_id, html_path, is_adult, adult_score, adult_reason, og_image_path, screenshot_path, slug_source) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-            [$pageSlug, $title, $type, $lang, $now, current_user_id(), 'live', $cost, $sessionId, $path, $isAdult ? 1 : 0, $adult['score'], $adult['reason'], $ogImagePath, $screenshotPath ?: '', $slugResult['source']]
-        );
+        // Reserve slug with INSERT first (unique PK), then write HTML atomically.
+        // On collision, INSERT retries with a new suffix — never UPDATE another user's row.
+        $reserved = publish_insert_new_page([
+            'title' => $title,
+            'type' => $type,
+            'lang' => $lang,
+            'created_at' => $now,
+            'owner_user_id' => current_user_id(),
+            'status' => 'live',
+            'cost_tokens' => $cost,
+            'session_id' => $sessionId,
+            'is_adult' => $isAdult ? 1 : 0,
+            'adult_score' => $adult['score'],
+            'adult_reason' => $adult['reason'],
+            'og_image_path' => $ogImagePath,
+            'screenshot_path' => $screenshotPath ?: '',
+        ], $generationMessages, $title, $desiredSlug);
+        $pageSlug = $reserved['slug'];
+        $slugResult = ['slug' => $pageSlug, 'source' => $reserved['source']];
+        $path = $reserved['path'];
+        // Re-stamp footer/meta if reserved slug differs from provisional (rare).
+        if ($pageSlug !== $provisional['slug']) {
+            $html = move_session_assets_to_slug($sessionId, $pageSlug, $html);
+            if ($isAdult) {
+                $html = inject_adult_gate($html, $pageSlug, normalize_locale(extract_html_lang($html)) ?: $locale);
+            }
+            $html = inject_generated_footer($html, $pageSlug, $pageLang);
+        }
+        write_site_html_atomic($path, $html);
     }
     db_exec('UPDATE sessions SET page_slug = ?, state = ?, updated_at = ? WHERE id = ?', [$pageSlug, 'done', $now, $sessionId]);
     $generationLocked = false;
@@ -203,7 +260,13 @@ try {
     }
 
     $url = 'https://' . $pageSlug . '.xlog.ink/';
-    append_session_message($sessionId, 'system', '[系统事件] 页面已发布：' . $url . '。标题《' . $title . '》。普通创建会话中，后续再次生成会创建新的页面地址，不覆盖这个页面；如果用户想修改这个已发布页面，请引导其使用邮箱修改链接或登录后的“我的页面”修改入口。');
+    $ownerId = current_user_id();
+    if ($ownerId) {
+        $publishGuide = '[系统事件] 页面已发布：' . $url . '。标题《' . $title . '》。页面已归入当前登录账号。普通创建会话中再次生成会创建新地址（编辑模式除外）。引导用户用右上角「我的」→「我的页面」修改此页；不要索要邮箱绑定。';
+    } else {
+        $publishGuide = '[系统事件] 页面已发布：' . $url . '。标题《' . $title . '》。普通创建会话中，后续再次生成会创建新的页面地址，不覆盖这个页面；如果用户想修改这个已发布页面，请引导其使用邮箱修改链接。登录后同会话或同邮箱可认领到「我的页面」。';
+    }
+    append_session_message($sessionId, 'system', $publishGuide);
     sse_event('stage', ['stage' => 'done']);
     sse_event('result', [
         'url' => $url,
@@ -229,7 +292,7 @@ try {
                     'og_description' => $description,
                     'og_image' => $ogImageUrl,
                 ]);
-                file_put_contents($path, $html, LOCK_EX);
+                write_site_html_atomic($path, $html);
             }
             db_exec(
                 'UPDATE pages SET og_image_path = ?, screenshot_path = ?, updated_at = ? WHERE slug = ?',
@@ -352,36 +415,63 @@ function extract_html_document($raw) {
 }
 
 function validate_generated_html($html) {
-    if (preg_match('/<script\b[^>]*\bsrc\s*=/i', $html)) throw new RuntimeException('External scripts are not allowed');
-    if (preg_match('/<link\b[^>]*\brel=["\']?stylesheet/i', $html)) throw new RuntimeException('External stylesheets are not allowed');
-    if (preg_match_all('/<img\b[^>]*\bsrc=["\']([^"\']+)["\']/i', $html, $m)) {
-        foreach ($m[1] as $src) {
-            if (strpos($src, 'data:') === 0) continue;
-            if (strpos($src, 'https://xlog.ink/site-assets/') !== 0) {
-                throw new RuntimeException('Only xlog.ink site-assets images are allowed');
-            }
-        }
-    }
-    if (preg_match('/<iframe\b/i', $html)) throw new RuntimeException('iframes are not allowed');
-    if (preg_match('/<form\b/i', $html)) throw new RuntimeException('forms are not allowed');
+    require_once __DIR__ . '/../includes/html_sanitize.php';
+    xlog_assert_safe_generated_html($html);
 }
 
-function inject_generated_footer($html, $slug = '') {
+function inject_generated_footer($html, $slug = '', $lang = 'zh-CN') {
     $baseUrl = rtrim((string)xlog_config('base_url', 'https://xlog.ink'), '/');
+    // Strip legacy floating badge so re-publishes upgrade UX (no batch rewrite of old pages).
+    $html = preg_replace(
+        '/<div\b[^>]*style=["\'][^"\']*position\s*:\s*fixed[^"\']*["\'][^>]*>\s*<a\b[^>]*href=["\']https?:\/\/(?:www\.)?xlog\.ink\/?["\'][^>]*>\s*Made with xlog\.ink\s*<\/a>\s*<\/div>/is',
+        '',
+        $html,
+        1
+    );
+
     $pixel = '';
     if (preg_match('/^[a-z0-9]{3,20}$/', (string)$slug)) {
         $pixelUrl = $baseUrl . '/api/visit.php?slug=' . rawurlencode($slug);
         $pixel = '<img src="' . h($pixelUrl) . '" alt="" width="1" height="1" loading="eager" referrerpolicy="origin-when-cross-origin" style="position:absolute;width:1px;height:1px;opacity:0;pointer-events:none;overflow:hidden">';
     }
-    $badge = '<div style="position:fixed;right:12px;bottom:12px;z-index:9999;font:12px/1.2 ui-monospace,monospace;background:rgba(0,0,0,.72);color:#fff;padding:8px 10px;border-radius:999px"><a href="https://xlog.ink" style="color:inherit;text-decoration:none">Made with xlog.ink</a></div>';
-    return preg_replace('/<\/body>/i', $pixel . "\n" . $badge . "\n</body>", $html, 1);
+
+    $hasCredit = (bool)preg_match('/\bdata-xlog-credit\s*=\s*["\']?1["\']?/i', $html);
+    if (!$hasCredit) {
+        $line = build_xlog_credit_line_html($lang, $baseUrl);
+        if (preg_match('/<\/footer>/i', $html)) {
+            // Merge into existing footer as a quiet last line (not a nested <footer>).
+            $inner = '<p data-xlog-credit="1" style="margin:16px 0 0;padding:0;text-align:center;font:12px/1.6 system-ui,-apple-system,BlinkMacSystemFont,\'Segoe UI\',sans-serif;color:rgba(0,0,0,.45)">' . $line . '</p>';
+            $html = preg_replace('/<\/footer>/i', $inner . "\n</footer>", $html, 1);
+        } else {
+            $creditFooter = '<footer data-xlog-credit="1" style="margin:0;padding:28px 16px 32px;text-align:center;font:12px/1.6 system-ui,-apple-system,BlinkMacSystemFont,\'Segoe UI\',sans-serif;color:rgba(0,0,0,.45)"><p style="margin:0">' . $line . '</p></footer>';
+            $html = preg_replace('/<\/body>/i', $creditFooter . "\n</body>", $html, 1);
+        }
+    }
+
+    if ($pixel !== '') {
+        $html = preg_replace('/<\/body>/i', $pixel . "\n</body>", $html, 1);
+    }
+    return $html;
+}
+
+function build_xlog_credit_line_html($lang = 'zh-CN', $baseUrl = 'https://xlog.ink') {
+    $lang = validate_lang(normalize_locale($lang) ?: 'zh-CN');
+    $href = h(rtrim((string)$baseUrl, '/') ?: 'https://xlog.ink');
+    $label = 'xlog.ink';
+    if ($lang === 'en') {
+        return 'Page created with <a href="' . $href . '" style="color:inherit;text-decoration:underline;text-underline-offset:2px">' . h($label) . '</a>';
+    }
+    if ($lang === 'zh-TW') {
+        return '本頁面由 <a href="' . $href . '" style="color:inherit;text-decoration:underline;text-underline-offset:2px">' . h($label) . '</a> 生成';
+    }
+    return '本页面由 <a href="' . $href . '" style="color:inherit;text-decoration:underline;text-underline-offset:2px">' . h($label) . '</a> 生成';
 }
 
 function inject_generated_csp($html) {
-    if (stripos($html, 'http-equiv="Content-Security-Policy"') !== false || stripos($html, "http-equiv='Content-Security-Policy'") !== false) {
-        return $html;
-    }
-    $policy = "default-src 'self'; img-src 'self' data: https://xlog.ink; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; font-src 'self' data:; media-src 'self' https://xlog.ink; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'";
+    require_once __DIR__ . '/../includes/html_sanitize.php';
+    // Always enforce our generated-page CSP (replace any model-supplied CSP meta).
+    $html = preg_replace('/<meta\b[^>]*http-equiv=["\']Content-Security-Policy["\'][^>]*>\s*/i', '', $html);
+    $policy = xlog_generated_page_csp();
     $meta = '<meta http-equiv="Content-Security-Policy" content="' . h($policy) . '">';
     return preg_replace('/<\/head>/i', $meta . "\n</head>", $html, 1);
 }
@@ -404,25 +494,28 @@ function inject_adult_gate($html, $slug, $locale = 'zh-CN') {
         }
         return '<body' . $attrs . ">\n" . $bodyInsert;
     }, $html, 1);
-    $runtime = build_generated_page_runtime_html();
-    $html = preg_replace('/<\/body>/i', $runtime . "\n</body>", $html, 1);
+    // No runtime JS (CSP script-src 'none').
     return $html;
 }
 
 function adult_gate_inline_css() {
+    // Pure CSS unlock via :has(.adult-gate-check:checked) — no JavaScript.
     return <<<HTML
 <style>
-.adult-gate--locked > *:not(.adult-gate):not(script):not(style){filter:blur(12px);pointer-events:none;user-select:none}
+.adult-gate--locked > *:not(.adult-gate):not(style){filter:blur(12px);pointer-events:none;user-select:none}
 .adult-gate{display:none;position:fixed;inset:0;z-index:2147483647;place-items:center;background:rgba(8,8,10,.76);padding:24px;color:#fff}
 .adult-gate--locked .adult-gate{display:grid}
-.adult-gate--approved .adult-gate{display:none}
+body:has(.adult-gate-check:checked) > *:not(.adult-gate):not(style){filter:none!important;pointer-events:auto;user-select:auto}
+body:has(.adult-gate-check:checked) .adult-gate{display:none!important}
+.adult-gate-check{position:absolute;opacity:0;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0)}
 .adult-gate-card{width:min(460px,100%);background:#141414;border:1px solid rgba(255,255,255,.18);border-radius:18px;padding:28px;box-shadow:0 30px 90px rgba(0,0,0,.45);font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
 .adult-gate-badge{display:inline-flex;margin-bottom:12px;padding:6px 10px;border-radius:999px;background:#fff;color:#111;font-weight:800;font-size:13px}
 .adult-gate-card h1{margin:0 0 10px;font-size:26px;line-height:1.15}
 .adult-gate-card p{margin:0;color:rgba(255,255,255,.76);line-height:1.6}
-.adult-gate-actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:22px}
-.adult-gate-actions .button{display:inline-flex;align-items:center;justify-content:center;min-height:42px;padding:0 14px;border-radius:12px;border:1px solid rgba(255,255,255,.24);background:#fff;color:#111;text-decoration:none;font-weight:800}
+.adult-gate-actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:22px;align-items:center}
+.adult-gate-actions .button{display:inline-flex;align-items:center;justify-content:center;min-height:42px;padding:0 14px;border-radius:12px;border:1px solid rgba(255,255,255,.24);background:#fff;color:#111;text-decoration:none;font-weight:800;cursor:pointer}
 .adult-gate-actions .button--ghost{background:transparent;color:#fff}
+.adult-gate-actions label.button{cursor:pointer}
 </style>
 HTML;
 }

@@ -45,8 +45,20 @@ function ai_has_key($purpose) {
     return false;
 }
 
+function ai_mock_allowed() {
+    // AUDIT-7 P2-6: mock only when explicitly enabled for local/test.
+    if (!(bool)xlog_config('ai.mock', false)) {
+        return false;
+    }
+    $env = strtolower((string)xlog_config('app.env', ''));
+    return in_array($env, ['local', 'test', 'dev'], true);
+}
+
 function ai_stream_chat(array $messages, callable $onDelta) {
     if (!ai_has_key('chat')) {
+        if (!ai_mock_allowed()) {
+            throw new RuntimeException('AI chat is not configured');
+        }
         $text = ai_mock_chat($messages);
         ai_stream_string($text, $onDelta);
         return ['input_tokens' => 0, 'output_tokens' => mb_strlen($text, 'UTF-8'), 'mock' => true];
@@ -56,6 +68,9 @@ function ai_stream_chat(array $messages, callable $onDelta) {
 
 function ai_stream_generate(array $messages, callable $onDelta) {
     if (!ai_has_key('gen')) {
+        if (!ai_mock_allowed()) {
+            throw new RuntimeException('AI generation is not configured');
+        }
         $text = ai_mock_html($messages);
         ai_stream_string($text, $onDelta);
         return ['input_tokens' => 0, 'output_tokens' => mb_strlen($text, 'UTF-8'), 'mock' => true];

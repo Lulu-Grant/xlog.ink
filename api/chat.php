@@ -45,7 +45,7 @@ $history = session_messages($sessionId) ?: [];
 $quota = quota_status('generate');
 $system = prompt_text('chat-system.txt')
     . "\n\n" . t('prompt', 'chatLanguage', $locale)
-    . "\n\n" . t('prompt', 'status', $locale, ['identity' => $quota['identity'], 'remaining' => $quota['remaining']]);
+    . "\n\n" . format_quota_status_for_prompt($locale, $quota);
 $modelMessages = [['role' => 'system', 'content' => $system]];
 $GLOBALS['xlog_chat_locale'] = $locale;
 $modelMessages = array_merge($modelMessages, truncate_messages_for_chat($history));
@@ -81,7 +81,8 @@ try {
     }
     sse_event('done', ['usage' => $usage]);
 } catch (Throwable $e) {
-    sse_event('error', ['code' => 'ai_error', 'message' => $e->getMessage()]);
+    error_log('chat ai_error: ' . $e->getMessage());
+    sse_event('error', ['code' => 'ai_error', 'message' => t('app', 'aiChatFailed', $locale) ?: 'AI chat failed']);
 }
 
 function truncate_messages_for_chat(array $messages) {

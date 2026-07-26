@@ -12,15 +12,17 @@ if (!process.env.PLAYWRIGHT_BROWSERS_PATH) {
 }
 
 function loadPlaywright() {
+  // Prefer env override, then local node_modules, then server install path.
+  // Do not hardcode developer machine absolute paths (AUDIT-7 P2-8).
   const candidates = [
+    process.env.PLAYWRIGHT_MODULE,
     'playwright',
     '/opt/xlog-playwright/node_modules/playwright',
-    '/Users/apple/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/playwright'
-  ];
+  ].filter(Boolean);
   for (const name of candidates) {
     try { return require(name); } catch (e) {}
   }
-  throw new Error('playwright module not found');
+  throw new Error('playwright module not found; set PLAYWRIGHT_MODULE or install playwright');
 }
 
 (async () => {
@@ -33,7 +35,11 @@ function loadPlaywright() {
   const { chromium } = loadPlaywright();
   const browser = await chromium.launch({ headless: true });
   try {
-    const page = await browser.newPage({ viewport: { width: 1200, height: 1600 }, deviceScaleFactor: 1 });
+    const page = await browser.newPage({
+      viewport: { width: 1200, height: 1600 },
+      deviceScaleFactor: 1,
+      userAgent: 'xlog-shot/1.0 HeadlessChrome',
+    });
     await page.goto(target, { waitUntil: 'networkidle', timeout: 20000 });
     const lower = out.toLowerCase();
     const type = lower.endsWith('.jpg') || lower.endsWith('.jpeg') ? 'jpeg' : 'png';

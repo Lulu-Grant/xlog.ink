@@ -360,6 +360,159 @@ function generate_semantic_slug(array $messages, $title = '', $desired = '') {
     throw new RuntimeException('Could not generate safe slug');
 }
 
+/**
+ * Atomically write site HTML via temp file + rename (AUDIT-8 P1-1).
+ */
+function write_site_html_atomic($path, $html) {
+    $path = (string)$path;
+    $dir = dirname($path);
+    if (!is_dir($dir) && !@mkdir($dir, 0755, true) && !is_dir($dir)) {
+        throw new RuntimeException('Write failed: site dir missing');
+    }
+    $tmp = $dir . '/.' . basename($path) . '.' . bin2hex(random_bytes(4)) . '.tmp';
+    if (file_put_contents($tmp, $html, LOCK_EX) === false) {
+        throw new RuntimeException('Write failed');
+    }
+    if (!@rename($tmp, $path)) {
+        @unlink($tmp);
+        throw new RuntimeException('Write failed');
+    }
+    return true;
+}
+
+/**
+ * Candidate slugs for create path. Prefers semantic generation then forced suffixes.
+ *
+ * @return list<array{slug:string,source:string}>
+ */
+function generate_create_slug_candidates(array $messages, $title = '', $desired = '', $max = 40) {
+    $candidates = [];
+    $seen = [];
+    $push = static function ($slug, $source) use (&$candidates, &$seen) {
+        $slug = slug_clean($slug);
+        if ($slug === '' || slug_is_reserved($slug) || isset($seen[$slug])) return;
+        $seen[$slug] = true;
+        $candidates[] = ['slug' => $slug, 'source' => $source];
+    };
+
+    try {
+        $first = generate_semantic_slug($messages, $title, $desired);
+        $push($first['slug'], $first['source']);
+    } catch (Throwable $e) {
+        // continue with random candidates
+    }
+
+    $desired = slug_clean($desired);
+    $base = $desired !== '' && !slug_is_reserved($desired)
+        ? substr($desired, 0, 7)
+        : substr(slug_base_from_text($title), 0, 7);
+    if (strlen($base) < 3) $base = 'page';
+
+    while (count($candidates) < $max) {
+        $slug = substr($base, 0, 7) . random_letters(3);
+        $push($slug, $desired !== '' ? 'custom_suffix' : 'auto');
+        if (count($candidates) >= $max) break;
+        $push(random_name(10), 'random_fallback');
+    }
+    return $candidates;
+}
+
+/**
+ * INSERT-only page create with unique slug (AUDIT-8 P1-1).
+ * Never UPDATE an existing slug. On PRIMARY KEY collision, try next candidate.
+ *
+ * @return array{slug:string,source:string,path:string}
+ */
+function publish_insert_new_page(array $rowFields, array $messages, $title = '', $desired = '') {
+    $siteDir = rtrim((string)xlog_config('site_dir'), '/');
+    $candidates = generate_create_slug_candidates($messages, $title, $desired, 50);
+    $lastError = null;
+
+    foreach ($candidates as $cand) {
+        $slug = $cand['slug'];
+        $path = $siteDir . '/' . $slug . '.html';
+        // Skip if file already exists for a different orphaned slug (belt + suspenders).
+        if (is_file($path) && !db_one('SELECT slug FROM pages WHERE slug = ?', [$slug])) {
+            // Orphan file: still try a new slug rather than overwrite.
+            continue;
+        }
+        if (is_file($path) && db_one('SELECT slug FROM pages WHERE slug = ?', [$slug])) {
+            continue;
+        }
+
+        $params = [
+            $slug,
+            (string)($rowFields['title'] ?? $title),
+            (string)($rowFields['type'] ?? 'page'),
+            (string)($rowFields['lang'] ?? 'zh-CN'),
+            (string)($rowFields['created_at'] ?? now_iso()),
+            $rowFields['owner_user_id'] ?? null,
+            (string)($rowFields['status'] ?? 'live'),
+            (int)($rowFields['cost_tokens'] ?? 0),
+            $rowFields['session_id'] ?? null,
+            $path,
+            !empty($rowFields['is_adult']) ? 1 : 0,
+            $rowFields['adult_score'] ?? 0,
+            (string)($rowFields['adult_reason'] ?? ''),
+            (string)($rowFields['og_image_path'] ?? ''),
+            (string)($rowFields['screenshot_path'] ?? ''),
+            (string)($cand['source']),
+        ];
+
+        try {
+            db_exec(
+                'INSERT INTO pages (slug, title, type, lang, created_at, owner_user_id, status, cost_tokens, session_id, html_path, is_adult, adult_score, adult_reason, og_image_path, screenshot_path, slug_source)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+                $params
+            );
+            return ['slug' => $slug, 'source' => $cand['source'], 'path' => $path];
+        } catch (Throwable $e) {
+            $msg = $e->getMessage();
+            $isUnique = stripos($msg, 'UNIQUE') !== false
+                || stripos($msg, 'primary key') !== false
+                || stripos($msg, 'constraint') !== false;
+            if ($isUnique) {
+                $lastError = $e;
+                continue;
+            }
+            throw $e;
+        }
+    }
+
+    throw new RuntimeException('Could not reserve unique page slug' . ($lastError ? (': ' . $lastError->getMessage()) : ''));
+}
+
+/**
+ * UPDATE only for a verified edit session page (AUDIT-8 P1-1).
+ * Returns rows affected (0 means foreign/missing slug — caller must fail closed).
+ */
+function publish_update_edit_page($slug, array $fields) {
+    $slug = slug_clean($slug);
+    if ($slug === '') {
+        return 0;
+    }
+    $stmt = db_exec(
+        'UPDATE pages SET title = ?, type = ?, lang = ?, updated_at = ?, cost_tokens = ?, session_id = ?, html_path = ?, is_adult = ?, adult_score = ?, adult_reason = ?, og_image_path = ?, screenshot_path = ?, slug_source = ? WHERE slug = ?',
+        [
+            (string)($fields['title'] ?? ''),
+            (string)($fields['type'] ?? 'page'),
+            (string)($fields['lang'] ?? 'zh-CN'),
+            (string)($fields['updated_at'] ?? now_iso()),
+            (int)($fields['cost_tokens'] ?? 0),
+            $fields['session_id'] ?? null,
+            (string)($fields['html_path'] ?? ''),
+            !empty($fields['is_adult']) ? 1 : 0,
+            $fields['adult_score'] ?? 0,
+            (string)($fields['adult_reason'] ?? ''),
+            (string)($fields['og_image_path'] ?? ''),
+            (string)($fields['screenshot_path'] ?? ''),
+            (string)($fields['slug_source'] ?? 'edit'),
+            $slug,
+        ]
+    );
+    return $stmt->rowCount();
+}
+
 function first_session_image_path($sessionId) {
     $row = db_one(
         "SELECT path FROM images WHERE session_id = ? AND slug IS NOT NULL ORDER BY CASE slot WHEN 'hero' THEN 0 WHEN 'product' THEN 1 WHEN 'avatar' THEN 2 ELSE 3 END, id DESC LIMIT 1",
@@ -424,5 +577,7 @@ function capture_page_image($slug) {
         error_log('capture_page_image failed: ' . implode("\n", $output));
         return null;
     }
-    return $outRel;
+    // Cache-bust query so edits invalidate browser/CDN (AUDIT-7 P2-2).
+    $ver = @substr(hash_file('sha256', $out) ?: (string)@filemtime($out), 0, 12);
+    return $outRel . ($ver !== '' ? ('?v=' . $ver) : '');
 }

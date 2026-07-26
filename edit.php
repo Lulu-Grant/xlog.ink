@@ -13,6 +13,19 @@ if (!$page) {
     echo 'Edit link not found';
     exit;
 }
+
+// G10: if viewer is logged in with matching email, silently claim orphan page.
+$userId = current_user_id();
+if ($userId) {
+    claim_page_for_user((string)$page['slug'], (int)$userId, ['email_match' => true]);
+    // Reload page row after possible claim.
+    $page = db_one('SELECT * FROM pages WHERE slug = ?', [$page['slug']]) ?: $page;
+}
+
 $sessionId = create_page_edit_session($page, 'edit_token');
+// Bind edit session to logged-in user when possible.
+if ($userId) {
+    bind_session_to_user($sessionId, (int)$userId);
+}
 header('Location: /index.php?edit_session=' . urlencode($sessionId));
 exit;

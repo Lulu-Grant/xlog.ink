@@ -1,5 +1,8 @@
 <?php
 require_once __DIR__ . '/includes/db.php';
+require_once __DIR__ . '/includes/pay.php';
+require_once __DIR__ . '/includes/admin_security.php';
+require_once __DIR__ . '/includes/admin_data.php';
 
 $configuredToken = trim((string)xlog_config('admin.token', ''));
 $isLocal = in_array(client_ip(), ['127.0.0.1', '::1'], true);
@@ -26,14 +29,18 @@ if ($configuredToken !== '') {
 
         admin_record_login_attempt(true);
         admin_clear_failed_logins();
+        // Fresh login: sync cookie into $_COOKIE for CSRF, then PRG so dashboard
+        // forms are never rendered on the bare token POST (avoids ticket mismatch).
+        admin_issue_session_cookie($configuredToken);
+        $isChannelPost = isset($_POST['pay_channel_action']);
+        $isGrantPost = isset($_POST['admin_grant_action']);
+        if (!$isChannelPost && !$isGrantPost) {
+            header('Location: ' . admin_tab_url('overview'), true, 303);
+            exit;
+        }
     }
-    setcookie('xlog_admin', admin_cookie_ticket($configuredToken), [
-        'expires' => time() + 86400,
-        'path' => '/',
-        'secure' => admin_request_is_https(),
-        'httponly' => true,
-        'samesite' => 'Lax',
-    ]);
+    // Refresh ticket each authenticated request; always mirror into $_COOKIE.
+    admin_issue_session_cookie($configuredToken);
 } elseif (!$isLocal) {
     error_log('SECURITY WARNING: xlog admin.token is not configured; refusing non-local admin.php access. Configure /etc/xlog/config.php admin.token before production use.');
     http_response_code(403);
@@ -43,47 +50,138 @@ if ($configuredToken !== '') {
     error_log('SECURITY WARNING: xlog admin.token is not configured; admin.php is using localhost-only fallback.');
 }
 
+// Flash via PHP session (PRG).
+xlog_start_session();
+$adminFlash = (string)($_SESSION['admin_flash'] ?? '');
+$adminFlashError = (string)($_SESSION['admin_flash_error'] ?? '');
+unset($_SESSION['admin_flash'], $_SESSION['admin_flash_error']);
+
+// --- POST: payment channel CRUD → PRG to channels ---
+if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST' && isset($_POST['pay_channel_action'])) {
+    $action = (string)$_POST['pay_channel_action'];
+    try {
+        if (!admin_csrf_ok($_POST['csrf'] ?? '')) {
+            throw new InvalidArgumentException('CSRF 校验失败，请刷新后台后重试');
+        }
+        if ($action === 'save') {
+            $isNew = !empty($_POST['is_new']);
+            $input = [
+                'id' => $_POST['id'] ?? '',
+                'name' => $_POST['name'] ?? '',
+                'pay_type' => $_POST['pay_type'] ?? 'alipay',
+                'driver' => $_POST['driver'] ?? 'epay_v1_md5',
+                'api_base' => $_POST['api_base'] ?? '',
+                'pid' => $_POST['pid'] ?? '',
+                'md5_key' => $_POST['md5_key'] ?? '',
+                'merchant_private_key' => $_POST['merchant_private_key'] ?? '',
+                'platform_public_key' => $_POST['platform_public_key'] ?? '',
+                'method' => $_POST['method'] ?? 'jump',
+                'enabled' => !empty($_POST['enabled']),
+                'sort_order' => (int)($_POST['sort_order'] ?? 100),
+                'keep_secrets' => true,
+            ];
+            pay_channel_save($input, $isNew);
+            $_SESSION['admin_flash'] = '支付渠道已保存：' . $input['id'];
+        } elseif ($action === 'delete') {
+            $id = trim((string)($_POST['id'] ?? ''));
+            $del = pay_channel_delete($id);
+            if (empty($del['ok'])) {
+                throw new InvalidArgumentException('无法停用渠道：' . ($del['error'] ?? 'error'));
+            }
+            $n = (int)($del['orders'] ?? 0);
+            $_SESSION['admin_flash'] = $n > 0
+                ? ('渠道已停用（保留密钥供 ' . $n . ' 笔历史订单对账）：' . $id)
+                : ('渠道已停用：' . $id);
+        } elseif ($action === 'toggle') {
+            $id = trim((string)($_POST['id'] ?? ''));
+            $ch = pay_channel_by_id($id);
+            if (!$ch) {
+                throw new InvalidArgumentException('渠道不存在');
+            }
+            $want = isset($_POST['enabled_to']) ? (int)$_POST['enabled_to'] : ((int)$ch['enabled'] ? 0 : 1);
+            if ($want === 1 && !pay_channel_is_configured($ch)) {
+                throw new InvalidArgumentException('渠道密钥不完整，无法启用');
+            }
+            db_exec('UPDATE pay_channels SET enabled = ?, updated_at = ? WHERE id = ?', [$want, now_iso(), $id]);
+            $_SESSION['admin_flash'] = '渠道 ' . $id . ' 已' . ($want ? '启用' : '停用');
+        } else {
+            throw new InvalidArgumentException('未知操作');
+        }
+    } catch (Throwable $e) {
+        $_SESSION['admin_flash_error'] = $e->getMessage();
+    }
+    header('Location: ' . admin_tab_url('channels'), true, 303);
+    exit;
+}
+
+// --- POST: optional credit grant → PRG to users ---
+if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST' && isset($_POST['admin_grant_action'])) {
+    $uid = (int)($_POST['user_id'] ?? 0);
+    try {
+        if (!admin_csrf_ok($_POST['csrf'] ?? '')) {
+            throw new InvalidArgumentException('CSRF 校验失败，请刷新后台后重试');
+        }
+        $result = admin_grant_credits($uid, (int)($_POST['credits'] ?? 0), (string)($_POST['note'] ?? ''));
+        if (empty($result['ok'])) {
+            $err = (string)($result['error'] ?? 'grant_failed');
+            if ($err === 'credit_grant_disabled') {
+                throw new InvalidArgumentException('积分补发未开启（admin.allow_credit_grant）');
+            }
+            throw new InvalidArgumentException('补发失败：' . $err);
+        }
+        $_SESSION['admin_flash'] = '已补发积分，当前余额 ' . (int)$result['credits'];
+    } catch (Throwable $e) {
+        $_SESSION['admin_flash_error'] = $e->getMessage();
+    }
+    header('Location: ' . admin_tab_url('users', [
+        'user_id' => $uid > 0 ? $uid : null,
+        'q' => trim((string)($_GET['q'] ?? $_POST['q'] ?? '')),
+    ]), true, 303);
+    exit;
+}
+
+// --- GET tab routing (lazy data) ---
+$tab = admin_resolve_tab($_GET['tab'] ?? 'overview');
+$today = utc_date();
 $limit = (int)($_GET['limit'] ?? 50);
 $limit = max(10, min(200, $limit));
 $q = trim((string)($_GET['q'] ?? ''));
-$today = utc_date();
 
-$where = "p.status = 'live'";
-$params = [];
-if ($q !== '') {
-    $where .= " AND (p.slug LIKE ? OR p.title LIKE ? OR p.type LIKE ?)";
-    $like = '%' . $q . '%';
-    $params = [$like, $like, $like];
+// Defaults for partials
+$kpis = null;
+$pages = null;
+$payChannels = null;
+$editChannel = null;
+$orders = null;
+$orderStatus = 'all';
+$users = null;
+$ledger = [];
+$focusUserId = null;
+$grantAllowed = admin_credit_grant_allowed();
+
+if ($tab === 'overview') {
+    $kpis = admin_overview_kpis();
+} elseif ($tab === 'pages') {
+    $pages = admin_list_pages($q, $limit);
+} elseif ($tab === 'channels') {
+    $editChannelId = trim((string)($_GET['edit_channel'] ?? ''));
+    $editChannel = $editChannelId !== '' ? pay_channel_by_id($editChannelId) : null;
+    $payChannels = pay_channels_all();
+} elseif ($tab === 'orders') {
+    $orderStatus = strtolower(trim((string)($_GET['status'] ?? 'all')));
+    if ($orderStatus === '') {
+        $orderStatus = 'all';
+    }
+    $orders = admin_list_orders($orderStatus, $limit, $q);
+} elseif ($tab === 'users') {
+    $userLimit = max(1, min(100, (int)($_GET['limit'] ?? 30)));
+    $limit = $userLimit;
+    $users = admin_search_users($q, $userLimit);
+    $focusUserId = isset($_GET['user_id']) ? (int)$_GET['user_id'] : null;
+    if ($focusUserId > 0) {
+        $ledger = admin_user_credit_ledger($focusUserId, 50);
+    }
 }
-
-$totalPages = db_one("SELECT COUNT(*) AS c FROM pages p WHERE $where", $params)['c'] ?? 0;
-$todayPages = db_one("SELECT COUNT(*) AS c FROM pages WHERE status = 'live' AND substr(created_at, 1, 10) = ?", [$today])['c'] ?? 0;
-$totalVisits = db_one('SELECT COUNT(*) AS c FROM page_visits')['c'] ?? 0;
-$todayVisits = db_one('SELECT COUNT(*) AS c FROM page_visits WHERE date = ?', [$today])['c'] ?? 0;
-$todayVisitors = db_one('SELECT COUNT(DISTINCT visitor_hash) AS c FROM page_visits WHERE date = ?', [$today])['c'] ?? 0;
-
-$pages = db_all(
-    "SELECT
-        p.slug, p.title, p.type, p.lang, p.created_at, p.updated_at, p.is_adult, p.editable, p.slug_source,
-        COALESCE(v.total_visits, 0) AS total_visits,
-        COALESCE(v.today_visits, 0) AS today_visits,
-        COALESCE(v.today_visitors, 0) AS today_visitors,
-        v.last_visit
-    FROM pages p
-    LEFT JOIN (
-        SELECT slug,
-            COUNT(*) AS total_visits,
-            SUM(CASE WHEN date = ? THEN 1 ELSE 0 END) AS today_visits,
-            COUNT(DISTINCT CASE WHEN date = ? THEN visitor_hash ELSE NULL END) AS today_visitors,
-            MAX(created_at) AS last_visit
-        FROM page_visits
-        GROUP BY slug
-    ) v ON v.slug = p.slug
-    WHERE $where
-    ORDER BY COALESCE(p.updated_at, p.created_at) DESC
-    LIMIT $limit",
-    array_merge([$today, $today], $params)
-);
 
 function admin_login_form($failed = false, $lockedSeconds = 0) {
     http_response_code($lockedSeconds > 0 ? 429 : ($failed ? 403 : 200));
@@ -96,17 +194,6 @@ function admin_login_form($failed = false, $lockedSeconds = 0) {
     }
     echo '<input name="token" type="password" placeholder="admin token" autofocus ' . ($lockedSeconds > 0 ? 'disabled' : '') . '> <button ' . ($lockedSeconds > 0 ? 'disabled' : '') . '>进入</button></form>';
     exit;
-}
-
-function admin_cookie_ticket($token) {
-    return hash_hmac('sha256', 'xlog-admin-v1', (string)$token . '|' . XLOG_ROOT);
-}
-
-function admin_request_is_https() {
-    if (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on') return true;
-    if (strtolower((string)($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '')) === 'https') return true;
-    if (strtolower((string)($_SERVER['HTTP_X_FORWARDED_SSL'] ?? '')) === 'on') return true;
-    return false;
 }
 
 function admin_login_ip_hash() {
@@ -136,104 +223,18 @@ function admin_login_locked_seconds() {
         [admin_login_ip_hash(), $cutoff]
     );
     $count = (int)($row['c'] ?? 0);
-    if ($count < $maxAttempts) return 0;
+    if ($count < $maxAttempts) {
+        return 0;
+    }
     $firstTs = strtotime((string)($row['first_at'] ?? '')) ?: time();
     return max(1, $lockSeconds - (time() - $firstTs));
 }
 
 function fmt_dt($value) {
-    if (!$value) return '-';
+    if (!$value) {
+        return '-';
+    }
     return h(str_replace('T', ' ', substr((string)$value, 0, 19)));
 }
 
-?><!doctype html>
-<html lang="zh-CN">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>xlog.ink admin</title>
-<style>
-:root{--bg:#f4f1ea;--ink:#24211f;--muted:#8b8379;--line:#d8d0c4;--strong:#24211f;--accent:#df7658}
-*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.55 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
-.wrap{width:min(1180px,100%);margin:0 auto;padding:24px}
-header{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;padding-bottom:16px;border-bottom:2px solid var(--strong)}
-h1{margin:0;font-size:22px;letter-spacing:.02em}.muted{color:var(--muted)}
-.stats{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px;margin:18px 0}
-.stat{border:1.5px solid var(--strong);padding:14px;background:transparent}.stat b{display:block;font-size:24px;line-height:1.1}.stat span{color:var(--muted);font-size:12px}
-form.search{display:flex;gap:8px;margin:14px 0 18px}input,button,select{font:inherit;border:1.5px solid var(--line);background:transparent;color:var(--ink);height:36px;padding:0 10px}button{border-color:var(--strong);font-weight:700}
-table{width:100%;border-collapse:collapse;border:1.5px solid var(--strong);background:transparent}th,td{padding:10px;border-bottom:1px solid var(--line);vertical-align:top;text-align:left}th{font-size:12px;color:var(--muted);font-weight:700}tr:hover{background:rgba(223,118,88,.06)}
-.title{max-width:340px;font-weight:700}.slug a{color:var(--accent);font-weight:700;text-decoration:none}.badge{display:inline-flex;border:1px solid var(--line);padding:1px 6px;margin-right:4px}
-.num{font-weight:800}.actions a{color:var(--ink);text-decoration:none;border:1px solid var(--strong);padding:4px 7px;display:inline-flex;margin:0 4px 4px 0}
-@media(max-width:820px){.wrap{padding:14px}.stats{grid-template-columns:repeat(2,minmax(0,1fr))}table{display:block;overflow:auto;white-space:nowrap}header{align-items:flex-start;flex-direction:column}}
-</style>
-</head>
-<body>
-<div class="wrap">
-<header>
-    <div>
-        <h1>■ xlog.ink admin</h1>
-        <div class="muted">近期页面、访问事件和今日去重访客</div>
-    </div>
-    <div class="muted">UTC 日期：<?= h($today) ?></div>
-</header>
-
-<section class="stats">
-    <div class="stat"><b><?= (int)$totalPages ?></b><span>页面总数</span></div>
-    <div class="stat"><b><?= (int)$todayPages ?></b><span>今日生成</span></div>
-    <div class="stat"><b><?= (int)$totalVisits ?></b><span>访问事件</span></div>
-    <div class="stat"><b><?= (int)$todayVisits ?></b><span>今日访问</span></div>
-    <div class="stat"><b><?= (int)$todayVisitors ?></b><span>今日访客</span></div>
-</section>
-
-<form class="search" method="get">
-    <input name="q" value="<?= h($q) ?>" placeholder="搜索 slug / 标题 / 类型">
-    <select name="limit">
-        <?php foreach ([20, 50, 100, 200] as $n): ?><option value="<?= $n ?>" <?= $limit === $n ? 'selected' : '' ?>><?= $n ?></option><?php endforeach; ?>
-    </select>
-    <button>筛选</button>
-</form>
-
-<table>
-    <thead>
-        <tr>
-            <th>页面</th>
-            <th>类型</th>
-            <th>访问</th>
-            <th>今日</th>
-            <th>最近访问</th>
-            <th>创建/更新</th>
-            <th>状态</th>
-            <th>操作</th>
-        </tr>
-    </thead>
-    <tbody>
-    <?php foreach ($pages as $p): $url = 'https://' . $p['slug'] . '.xlog.ink/'; ?>
-        <tr>
-            <td>
-                <div class="slug"><a href="<?= h($url) ?>" target="_blank" rel="noopener"><?= h($p['slug']) ?></a></div>
-                <div class="title"><?= h($p['title']) ?></div>
-            </td>
-            <td><?= h($p['type']) ?><br><span class="muted"><?= h($p['lang']) ?></span></td>
-            <td><span class="num"><?= (int)$p['total_visits'] ?></span></td>
-            <td><span class="num"><?= (int)$p['today_visits'] ?></span><br><span class="muted"><?= (int)$p['today_visitors'] ?> 人</span></td>
-            <td><?= fmt_dt($p['last_visit']) ?></td>
-            <td><?= fmt_dt($p['created_at']) ?><br><span class="muted"><?= fmt_dt($p['updated_at']) ?></span></td>
-            <td>
-                <?php if (!empty($p['is_adult'])): ?><span class="badge">18+</span><?php endif; ?>
-                <?php if (!empty($p['editable'])): ?><span class="badge">editable</span><?php endif; ?>
-                <?php if (!empty($p['slug_source'])): ?><span class="badge"><?= h($p['slug_source']) ?></span><?php endif; ?>
-            </td>
-            <td class="actions">
-                <a href="<?= h($url) ?>" target="_blank" rel="noopener">打开</a>
-                <a href="/site/<?= h($p['slug']) ?>.html" target="_blank" rel="noopener">静态</a>
-            </td>
-        </tr>
-    <?php endforeach; ?>
-    <?php if (!$pages): ?>
-        <tr><td colspan="8" class="muted">没有匹配页面。</td></tr>
-    <?php endif; ?>
-    </tbody>
-</table>
-</div>
-</body>
-</html>
+require __DIR__ . '/partials/admin/layout.php';

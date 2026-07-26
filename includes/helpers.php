@@ -324,6 +324,10 @@ function build_generated_head_html(array $opts) {
 HTML;
 }
 
+/**
+ * Adult gate without JavaScript (AUDIT-7: CSP script-src 'none').
+ * Pure CSS :has(checkbox:checked) unlock for the current page view.
+ */
 function build_adult_gate_parts($uiLang, $slug, $isAdult) {
     $adultKey = 'xlog_adult_ok_' . $slug;
 
@@ -332,44 +336,20 @@ function build_adult_gate_parts($uiLang, $slug, $isAdult) {
             'adult_key' => $adultKey,
             'body_class_suffix' => '',
             'boot_html' => '',
+            'body_boot_html' => '',
             'gate_html' => '',
         ];
     }
 
     $i18nAdult = get_i18n()['adultGate'];
     $adult = $i18nAdult[$uiLang] ?? $i18nAdult['zh-TW'];
-    $adultKeyJs = json_encode($adultKey, JSON_UNESCAPED_UNICODE);
     $adultBadge   = h($adult['badge']);
     $adultTitle   = h($adult['title']);
     $adultMsg     = h($adult['msg']);
     $adultConfirm = h($adult['confirm']);
     $adultLeave   = h($adult['leave']);
 
-    $bootHtml = <<<HTML
-  <script>
-  (function(){
-    window.__xlogAdultGateApproved = false;
-    try {
-      if (localStorage.getItem({$adultKeyJs}) === '1') {
-        window.__xlogAdultGateApproved = true;
-      }
-    } catch (e) {}
-  })();
-  </script>
-HTML;
-
-    $bodyBootHtml = <<<HTML
-  <script>
-  (function(){
-    if (!window.__xlogAdultGateApproved) return;
-    var body = document.body;
-    if (!body) return;
-    body.classList.remove('adult-gate--locked');
-    body.classList.add('adult-gate--approved');
-  })();
-  </script>
-HTML;
-
+    // No <script>: checkbox + CSS :has() toggles unlock (no localStorage).
     $gateHtml = <<<HTML
   <div class="adult-gate" aria-modal="true" role="dialog" aria-labelledby="adult-gate-title">
     <div class="adult-gate-card">
@@ -377,7 +357,8 @@ HTML;
       <h1 id="adult-gate-title">{$adultTitle}</h1>
       <p>{$adultMsg}</p>
       <div class="adult-gate-actions">
-        <button type="button" class="button button--accent" id="adult-confirm">{$adultConfirm}</button>
+        <input type="checkbox" id="xlog-adult-confirm" class="adult-gate-check" autocomplete="off">
+        <label for="xlog-adult-confirm" class="button button--accent">{$adultConfirm}</label>
         <a class="button button--ghost" href="https://xlog.ink/" id="adult-leave">{$adultLeave}</a>
       </div>
     </div>
@@ -387,33 +368,13 @@ HTML;
     return [
         'adult_key' => $adultKey,
         'body_class_suffix' => ' adult-gate--enabled adult-gate--locked',
-        'boot_html' => $bootHtml,
-        'body_boot_html' => $bodyBootHtml,
+        'boot_html' => '',
+        'body_boot_html' => '',
         'gate_html' => $gateHtml,
     ];
 }
 
+/** @deprecated No runtime JS on generated pages (CSP script-src none). */
 function build_generated_page_runtime_html() {
-    return <<<HTML
-  <script>
-  (function(){
-    var body = document.body;
-    if (!body.classList.contains('adult-gate--enabled')) return;
-    var key = body.getAttribute('data-adult-key');
-    if (body.classList.contains('adult-gate--approved')) {
-      body.classList.remove('adult-gate--locked');
-      body.classList.add('adult-gate--approved');
-      return;
-    }
-    var confirmBtn = document.getElementById('adult-confirm');
-    if (!confirmBtn) return;
-    confirmBtn.addEventListener('click', function(){
-      try { localStorage.setItem(key, '1'); } catch (e) {}
-      window.__xlogAdultGateApproved = true;
-      body.classList.remove('adult-gate--locked');
-      body.classList.add('adult-gate--approved');
-    });
-  })();
-  </script>
-HTML;
+    return '';
 }

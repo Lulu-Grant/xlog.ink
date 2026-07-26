@@ -12,6 +12,14 @@
     previewTimer: null,
     awaitingEmail: false,
     editMode: '',
+    billing: { credit_mode: false, pay_enabled: false, credit_cost: 1 },
+    payChannels: [],
+    pendingOrderId: '',
+    payPollTimer: null,
+    drawerOpen: false,
+    drawerView: '',
+    drawerTrigger: null,
+    quota: null,
   };
   var SESSION_STORAGE_KEY = 'xlog:lastSessionId';
   var locale = normalizeLocale(window.XLOG_LOCALE || document.body.dataset.locale || '');
@@ -167,6 +175,27 @@
     state.publishCard = null;
   }
 
+  function showRechargeCard(opts) {
+    opts = opts || {};
+    var isCredits = !!opts.credits;
+    var title = isCredits ? t('creditsExhaustedTitle') : t('quotaExhaustedTitle');
+    var exhaustedAll = !!(opts.all || (state.quota && state.quota.mode === 'user_credits' && (state.quota.remaining || 0) === 0 && (state.quota.fallback_remaining || 0) === 0));
+    var body = opts.message || (isCredits
+      ? (exhaustedAll ? t('creditsExhaustedAllBody') : t('creditsExhaustedBody'))
+      : t('quotaExhaustedBody'));
+    var canBuy = !!(state.user && state.billing && state.billing.pay_enabled);
+    var actions = '';
+    if (canBuy) {
+      actions = '<div class="inline-actions"><button type="button" class="publish-btn" data-open-buy-credits="1">' + escapeHtml(t('creditsExhaustedCta')) + '</button></div>';
+    } else if (!state.user) {
+      actions = '<div class="inline-actions"><button type="button" class="publish-btn" data-open-login="1">' + escapeHtml(t('login')) + '</button></div>';
+    }
+    return addActionCard('recharge-card',
+      '<div class="action-title">' + escapeHtml(title) + '</div>' +
+      '<p>' + escapeHtml(body) + '</p>' +
+      actions);
+  }
+
   function renderPresetCard() {
     if (document.querySelector('.preset-card')) return;
     addActionCard('preset-card',
@@ -210,7 +239,19 @@
     if (document.body.dataset.turnstileEnabled === '1') {
       turnstile = '<div class="turnstile-box"><div class="inline-turnstile"></div></div>';
     }
-    var confirmCopy = t('publishConfirmBody') + ' ' + t('publishEmailNotice');
+    var confirmCopy = t('publishConfirmBody');
+    if (state.user) {
+      confirmCopy += ' ' + t('publishEmailNoticeLoggedIn');
+      var cost = (state.billing && state.billing.credit_cost) || 1;
+      var q = state.quota || {};
+      if (q.mode === 'user_fallback') {
+        confirmCopy += ' ' + t('publishConfirmFallback', { remaining: q.remaining || 0 });
+      } else if (state.billing && state.billing.credit_mode) {
+        confirmCopy += ' ' + t('publishConfirmCost', { cost: cost });
+      }
+    } else {
+      confirmCopy += ' ' + t('publishEmailNotice');
+    }
     if (state.currentPage && !state.editMode) confirmCopy += ' ' + t('publishCreatesNewPage');
     state.publishCard = addActionCard('publish-confirm-card',
       '<div class="action-title">' + escapeHtml(t('publishConfirmTitle')) + '</div>' +
@@ -260,8 +301,7 @@
     api('/api/session.php', { start_new: true }).then(function (data) {
       applySessionPayload(data, true);
       leaveEditRoute();
-      $('#accountBox').hidden = true;
-      toggleMyPages(false);
+      closeDrawer();
       input.value = '';
       autogrow();
       input.focus();
@@ -320,6 +360,8 @@
         '<a data-open-page="1" href="#" target="_blank" rel="noopener">' + escapeHtml(t('openPage')) + '</a>' +
         '<button type="button" data-download-page-image="1" hidden>' + escapeHtml(t('downloadPageImage')) + '</button>' +
         '<button type="button" data-copy-url="1">' + escapeHtml(t('copyLink')) + '</button>' +
+        '<button type="button" data-regen-same="1">' + escapeHtml(t('regenSamePage')) + '</button>' +
+        '<button type="button" data-make-new-page="1">' + escapeHtml(t('makeNewPage')) + '</button>' +
         '</div>' +
         '</div>' +
         '</div>');
@@ -444,7 +486,9 @@
     if (action.type === 'upload') addUploadCard(params);
     else if (action.type === 'ready') showGenerateCard(params.reason || t('readyFallback'));
     else if (action.type === 'publish') showPublishConfirmCard();
-    else if (action.type === 'email') showEmailCard();
+    else if (action.type === 'email') {
+      if (!state.user) showEmailCard();
+    }
     else if (action.type === 'domain') showDomainCard(params);
     else if (action.type === 'image_gen') showImageGenCard(params);
     else if (action.type === 'new_session') showNewSessionCard();
@@ -557,8 +601,306 @@
 
   function setQuota(q) {
     if (!q) return;
-    var text = q.credits !== undefined ? t('quotaCredits', { credits: q.credits }) : t('quotaRemaining', { remaining: q.remaining, limit: q.limit });
+    state.quota = q;
+    var text;
+    if (q.mode === 'user_fallback') {
+      text = t('quotaFallback', { remaining: q.remaining, limit: q.limit });
+    } else if (q.mode === 'user_credits' || (q.credits !== undefined && q.identity === 'user' && q.mode !== 'guest_daily')) {
+      text = t('quotaCredits', { credits: q.credits });
+    } else {
+      text = t('quotaRemaining', { remaining: q.remaining, limit: q.limit });
+    }
     $('#quotaText').textContent = text;
+    var pill = $('#quotaText');
+    if (pill) {
+      pill.classList.toggle('is-clickable', !!(state.billing && state.billing.pay_enabled && state.user));
+      pill.title = (state.billing && state.billing.pay_enabled && state.user) ? t('buyCredits') : '';
+    }
+  }
+
+  function setBilling(billing) {
+    state.billing = billing || { credit_mode: false, pay_enabled: false, credit_cost: 1 };
+    var buyBtn = $('#buyCreditsBtn');
+    if (buyBtn) buyBtn.hidden = !(state.user && state.billing.pay_enabled);
+  }
+
+  function stopPayPoll() {
+    if (state.payPollTimer) {
+      clearInterval(state.payPollTimer);
+      state.payPollTimer = null;
+    }
+  }
+
+  function setBuyCreditsStatus(text) {
+    var el = $('#buyCreditsStatus');
+    if (!el) return;
+    el.textContent = text || '';
+  }
+
+  function drawerTitleFor(view) {
+    if (view === 'login') return t('login');
+    if (view === 'account') return t('myAccount');
+    if (view === 'credits') return t('buyCreditsTitle');
+    if (view === 'pages') return t('myPages');
+    return t('myAccount');
+  }
+
+  function isDrawerOpen() {
+    return !!state.drawerOpen;
+  }
+
+  function setDrawerView(view) {
+    var views = ['login', 'account', 'credits', 'pages'];
+    if (views.indexOf(view) < 0) view = 'account';
+    state.drawerView = view;
+    views.forEach(function (name) {
+      var el = document.querySelector('[data-drawer-view="' + name + '"]');
+      if (el) el.hidden = name !== view;
+    });
+    var title = $('#drawerTitle');
+    if (title) title.textContent = drawerTitleFor(view);
+    var back = $('#drawerBackBtn');
+    if (back) back.hidden = view !== 'pages';
+    if (view === 'credits') loadCreditPackages();
+    if (view === 'pages') loadMyPages();
+    // Login steps live only in the login view; never touch #accountRow (separate view).
+    if (view === 'login') {
+      var stepEmail = $('#loginStepEmail');
+      var stepCode = $('#loginStepCode');
+      if (stepEmail) stepEmail.hidden = false;
+      if (stepCode) stepCode.hidden = true;
+    }
+    // Account row must stay visible when showing account (login view used to hide it).
+    if (view === 'account') {
+      var accountRow = $('#accountRow');
+      if (accountRow) accountRow.hidden = false;
+    }
+  }
+
+  function isNarrowViewport() {
+    try {
+      return window.matchMedia('(max-width: 760px)').matches;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  function focusNoScroll(el) {
+    if (!el || typeof el.focus !== 'function') return;
+    try {
+      el.focus({ preventScroll: true });
+    } catch (e) {
+      try { el.focus(); } catch (e2) {}
+    }
+  }
+
+  function openDrawer(view, triggerEl) {
+    var drawer = $('#appDrawer');
+    var backdrop = $('#drawerBackdrop');
+    if (!drawer) return;
+    if (triggerEl) state.drawerTrigger = triggerEl;
+    setDrawerView(view);
+    drawer.hidden = false;
+    if (backdrop) backdrop.hidden = false;
+    // Next frame: start slide without focus-scroll shifting the chat column.
+    requestAnimationFrame(function () {
+      if (!state.drawerOpen && state.drawerView !== view) {
+        // closed again before paint
+      }
+      drawer.classList.add('is-open');
+      drawer.setAttribute('aria-hidden', 'false');
+    });
+    state.drawerOpen = true;
+    // Only lock body scroll on mobile overlay; PC body is already overflow:hidden
+    // and toggling it can shift the centered app-window (scrollbar/layout jump).
+    if (isNarrowViewport()) {
+      document.body.classList.add('drawer-open');
+    } else {
+      document.body.classList.remove('drawer-open');
+    }
+    var loginBtn = $('#loginToggle');
+    var quota = $('#quotaText');
+    if (loginBtn) loginBtn.setAttribute('aria-expanded', view === 'login' || view === 'account' ? 'true' : 'false');
+    if (quota) quota.setAttribute('aria-expanded', view === 'credits' ? 'true' : 'false');
+    // Defer focus until after transform starts; never scroll the page to the control.
+    requestAnimationFrame(function () {
+      focusNoScroll($('#closeDrawer'));
+    });
+  }
+
+  function closeDrawer() {
+    var drawer = $('#appDrawer');
+    var backdrop = $('#drawerBackdrop');
+    if (!drawer) return;
+    drawer.classList.remove('is-open');
+    drawer.setAttribute('aria-hidden', 'true');
+    state.drawerOpen = false;
+    state.drawerView = '';
+    document.body.classList.remove('drawer-open');
+    var loginBtn = $('#loginToggle');
+    var quota = $('#quotaText');
+    if (loginBtn) loginBtn.setAttribute('aria-expanded', 'false');
+    if (quota) quota.setAttribute('aria-expanded', 'false');
+    stopPayPoll();
+    var trigger = state.drawerTrigger;
+    state.drawerTrigger = null;
+    window.setTimeout(function () {
+      if (!state.drawerOpen) {
+        drawer.hidden = true;
+        if (backdrop) backdrop.hidden = true;
+      }
+    }, 230);
+    focusNoScroll(trigger);
+  }
+
+  /** @deprecated strip API — routes into drawer */
+  function toggleBuyCredits(force) {
+    if (force === false) {
+      if (state.drawerView === 'credits') closeDrawer();
+      return;
+    }
+    if (force === true || force === undefined) {
+      if (isDrawerOpen() && state.drawerView === 'credits' && force === undefined) {
+        closeDrawer();
+        return;
+      }
+      openDrawer('credits', state.drawerTrigger || $('#quotaText'));
+    }
+  }
+
+  function loadCreditPackages() {
+    var list = $('#buyCreditsList');
+    var hint = $('#buyCreditsHint');
+    if (!list) return;
+    if (!state.user) {
+      list.innerHTML = '<span>' + escapeHtml(t('buyCreditsLoginFirst')) + '</span>';
+      return;
+    }
+    list.innerHTML = '<span>' + escapeHtml(t('myPagesLoading')) + '</span>';
+    api('/api/pay/packages.php', {}).then(function (r) {
+      if (r.error) {
+        list.innerHTML = '<span>' + escapeHtml(r.error.message || t('payLoadFailed')) + '</span>';
+        return;
+      }
+      setBilling({
+        credit_mode: !!r.credit_mode,
+        pay_enabled: !!r.enabled,
+        credit_cost: r.credit_cost || 1
+      });
+      state.payChannels = Array.isArray(r.channels) ? r.channels : [];
+      if (r.quota) setQuota(r.quota);
+      if (hint) hint.textContent = t('buyCreditsBody', { cost: state.billing.credit_cost || 1 });
+      if (!r.enabled || !r.packages || !r.packages.length) {
+        list.innerHTML = '<span>' + escapeHtml(t('payLoadFailed')) + '</span>';
+        return;
+      }
+      if (!state.payChannels.length) {
+        list.innerHTML = '<span>' + escapeHtml(t('payNoChannel')) + '</span>';
+        return;
+      }
+      list.innerHTML = r.packages.map(function (pkg) {
+        var buttons = state.payChannels.map(function (ch) {
+          var label = ch.pay_type === 'wxpay' ? t('payWithWechat') : (ch.pay_type === 'alipay' ? t('payWithAlipay') : (ch.name || ch.id));
+          return '<button type="button" data-buy-package="' + escapeHtml(pkg.id) + '" data-channel-id="' + escapeHtml(ch.id) + '">' + escapeHtml(label) + '</button>';
+        }).join('');
+        return '<div class="buy-credits-item" data-package-id="' + escapeHtml(pkg.id) + '">' +
+          '<strong>' + escapeHtml(t('packageCredits', { credits: pkg.credits })) + '</strong>' +
+          '<span class="price">' + escapeHtml(t('packagePrice', { price: pkg.amount_yuan })) + '</span>' +
+          '<div class="buy-credits-actions">' + buttons + '</div>' +
+          '</div>';
+      }).join('');
+    }).catch(function () {
+      list.innerHTML = '<span>' + escapeHtml(t('payLoadFailed')) + '</span>';
+    });
+  }
+
+  function startPayPoll(orderId) {
+    stopPayPoll();
+    state.pendingOrderId = orderId || '';
+    var row = $('#buyCreditsPayRow');
+    if (row) row.hidden = !state.pendingOrderId;
+    if (!state.pendingOrderId) return;
+    setBuyCreditsStatus(t('payWaiting'));
+    var tries = 0;
+    state.payPollTimer = setInterval(function () {
+      tries += 1;
+      checkPayStatus(false);
+      if (tries >= 40) stopPayPoll();
+    }, 3000);
+  }
+
+  function checkPayStatus(manual) {
+    if (!state.pendingOrderId) return Promise.resolve();
+    return api('/api/pay/status.php', { order_id: state.pendingOrderId }).then(function (r) {
+      if (r.error) {
+        if (manual) setBuyCreditsStatus(r.error.message || t('payPending'));
+        return;
+      }
+      if (r.quota) setQuota(r.quota);
+      if (r.user) setUser(r.user);
+      if (r.order && r.order.status === 'paid') {
+        stopPayPoll();
+        setBuyCreditsStatus(t('paySuccess', { credits: r.order.credits }));
+        toast(t('paySuccess', { credits: r.order.credits }));
+        state.pendingOrderId = '';
+        return;
+      }
+      if (manual) setBuyCreditsStatus(t('payPending'));
+    }).catch(function () {
+      if (manual) setBuyCreditsStatus(t('payPending'));
+    });
+  }
+
+  function createCreditOrder(packageId, channelId) {
+    if (!state.user) {
+      toast(t('buyCreditsLoginFirst'));
+      return;
+    }
+    setBuyCreditsStatus(t('payOpening'));
+    var row = $('#buyCreditsPayRow');
+    if (row) row.hidden = false;
+    var body = { package_id: packageId };
+    if (channelId) body.channel_id = channelId;
+    api('/api/pay/create.php', body).then(function (r) {
+      if (r.error) {
+        setBuyCreditsStatus(r.error.message || t('payFailed'));
+        toast(r.error.message || t('payFailed'));
+        return;
+      }
+      var payUrl = r.pay_url || (r.order && r.order.pay_url) || '';
+      var orderId = r.order && r.order.id;
+      if (!payUrl || !orderId) {
+        setBuyCreditsStatus(t('payFailed'));
+        return;
+      }
+      startPayPoll(orderId);
+      window.open(payUrl, '_blank', 'noopener');
+    }).catch(function () {
+      setBuyCreditsStatus(t('payFailed'));
+      toast(t('payFailed'));
+    });
+  }
+
+  function handlePayReturnQuery() {
+    try {
+      var url = new URL(window.location.href);
+      if (url.searchParams.get('pay') !== 'return') return;
+      var orderId = url.searchParams.get('order_id') || '';
+      var status = url.searchParams.get('status') || '';
+      url.searchParams.delete('pay');
+      url.searchParams.delete('order_id');
+      url.searchParams.delete('status');
+      window.history.replaceState({}, '', url.pathname + (url.search ? url.search : '') + url.hash);
+      if (!orderId) return;
+      state.pendingOrderId = orderId;
+      // P2: auto-open credits drawer after payment return
+      openDrawer('credits', $('#quotaText'));
+      if (status === 'paid') {
+        setBuyCreditsStatus(t('payWaiting'));
+      }
+      startPayPoll(orderId);
+      checkPayStatus(true);
+    } catch (e) {}
   }
 
   var toastEl = null;
@@ -579,20 +921,30 @@
 
   function setUser(user) {
     state.user = user || null;
-    var myPages = $('#myPagesToggle');
     var login = $('#loginToggle');
-    if (myPages) {
-      myPages.hidden = !state.user;
-      if (window.matchMedia('(max-width: 760px)').matches) myPages.textContent = t('myPagesShort');
-      else myPages.textContent = t('myPages');
-    }
     if (login) {
-      login.textContent = state.user ? (state.user.email || t('accountFallback')).split('@')[0] : t('login');
+      // Logged-in: single "我的" entry; guest: "登录". Username no longer occupies the top bar.
+      login.textContent = state.user ? t('myAccount') : t('login');
+      login.classList.toggle('is-account', !!state.user);
     }
-    $('#loginStepEmail').hidden = !!state.user;
-    $('#loginStepCode').hidden = true;
-    $('#accountRow').hidden = !state.user;
-    if (state.user) $('#accountEmail').textContent = state.user.email || '';
+    var stepEmail = $('#loginStepEmail');
+    var stepCode = $('#loginStepCode');
+    if (stepEmail) stepEmail.hidden = !!state.user;
+    if (stepCode) stepCode.hidden = true;
+    if (state.user) {
+      var emailEl = $('#accountEmail');
+      if (emailEl) emailEl.textContent = state.user.email || '';
+    }
+    setBilling(state.billing);
+    if (!state.user) {
+      stopPayPoll();
+      // If drawer was on account/pages/credits, fall back to login or close
+      if (isDrawerOpen() && state.drawerView !== 'login') {
+        closeDrawer();
+      }
+    } else if (isDrawerOpen() && state.drawerView === 'login') {
+      setDrawerView('account');
+    }
   }
 
   function api(path, body) {
@@ -694,10 +1046,12 @@
   }
 
   function start() {
-    api('/api/auth/me.php', {}).then(function (me) {
+    api('/api/auth/me.php', { session_id: state.sessionId || '' }).then(function (me) {
+      if (me.billing) setBilling(me.billing);
       setUser(me.user);
       setQuota(me.quota);
-    }).catch(function () { setUser(null); });
+      handlePayReturnQuery();
+    }).catch(function () { setUser(null); handlePayReturnQuery(); });
     var resumeId = state.sessionId || storedSessionId();
     if (resumeId) {
       api('/api/session.php', { session_id: resumeId }).then(function (data) {
@@ -867,7 +1221,14 @@
           publishTerminal = true;
           state.readyShown = false;
           stopLivePreview(t('previewFailed'));
-          addMessage('system', '[err] ' + (d.message || t('generationFailed')));
+          var code = (d && d.code) || '';
+          if (code === 'credits_exhausted') {
+            showRechargeCard({ credits: true, message: d.message });
+          } else if (code === 'quota_exceeded') {
+            showRechargeCard({ credits: !!(state.user && state.billing && state.billing.credit_mode), message: d.message });
+          } else {
+            addMessage('system', '[err] ' + (d.message || t('generationFailed')));
+          }
           if (window.turnstile) window.turnstile.reset();
         },
         result: function (d) {
@@ -879,9 +1240,18 @@
           state.readyShown = false;
           state.publishCard = null;
           finalizeLivePreview(d.url, d.image_url || '', createdAfterExistingPage ? t('publishedNewPageNotice') : '');
-          addMessage('assistant', t('publishedAskEmail'));
-          showEmailCard();
-          api('/api/auth/me.php', {}).then(function (me) { setUser(me.user); setQuota(me.quota); }).catch(function () {});
+          // Logged-in users already own the page via owner_user_id; no guest email-binding prompt.
+          if (state.user) {
+            addMessage('assistant', t('publishedLoggedIn'));
+          } else {
+            addMessage('assistant', t('publishedAskEmail'));
+            showEmailCard();
+          }
+          api('/api/auth/me.php', { session_id: state.sessionId || '' }).then(function (me) {
+            if (me.billing) setBilling(me.billing);
+            setUser(me.user);
+            setQuota(me.quota);
+          }).catch(function () {});
           if (window.turnstile) window.turnstile.reset();
         },
         preview_image: function (d) {
@@ -905,6 +1275,7 @@
   }
 
   function showEmailCard() {
+    if (state.user) return;
     var existingCard = document.querySelector('.email-card[data-active="1"]');
     if (existingCard) {
       var existingInput = existingCard.querySelector('.owner-email');
@@ -955,9 +1326,11 @@
   }
 
   function toggleMyPages(open) {
-    var panel = $('#myPagesPanel');
-    panel.hidden = open === undefined ? !panel.hidden : !open;
-    if (!panel.hidden) loadMyPages();
+    if (open === false) {
+      if (state.drawerView === 'pages') closeDrawer();
+      return;
+    }
+    openDrawer('pages', state.drawerTrigger || $('#loginToggle'));
   }
 
   function loadMyPages() {
@@ -998,7 +1371,7 @@
         return;
       }
       state.sessionId = r.session_id;
-      toggleMyPages(false);
+      closeDrawer();
       api('/api/session.php', { session_id: state.sessionId }).then(function (data) {
         applySessionPayload(data, false);
       }).catch(function () {
@@ -1078,6 +1451,18 @@
   });
 
   messages.addEventListener('click', function (e) {
+    var openBuy = e.target.closest('button[data-open-buy-credits]');
+    if (openBuy) {
+      openDrawer('credits', openBuy);
+      return;
+    }
+    var openLogin = e.target.closest('button[data-open-login]');
+    if (openLogin) {
+      openDrawer('login', openLogin);
+      var emailInput = $('#loginEmail');
+      if (emailInput) setTimeout(function () { try { emailInput.focus(); } catch (err) {} }, 50);
+      return;
+    }
     var promptBtn = e.target.closest('button[data-prompt]');
     if (promptBtn) {
       disableCard(promptBtn.closest('.action-card'));
@@ -1204,18 +1589,105 @@
       imgLink.click();
       return;
     }
+    // G3: re-generate stays in session (edit current / new slug via normal flow);
+    // "make new page" opens explicit NEW_SESSION confirm — not auto-discard.
+    if (e.target.closest('button[data-regen-same]')) {
+      if (state.user && state.currentPage && state.currentPage.slug && !state.editMode) {
+        // Enter owner edit so next generate overwrites same URL when owned.
+        enterOwnerEdit(state.currentPage.slug);
+      } else {
+        showPublishConfirmCard();
+      }
+      return;
+    }
+    if (e.target.closest('button[data-make-new-page]')) {
+      showNewSessionCard();
+      return;
+    }
   });
   $('#loginToggle').addEventListener('click', function () {
-    var box = $('#accountBox');
-    box.hidden = !box.hidden;
+    var target = state.user ? 'account' : 'login';
+    if (isDrawerOpen() && (state.drawerView === target || (state.user && (state.drawerView === 'account' || state.drawerView === 'pages')))) {
+      // Toggle close when already on account/login (pages closes too if re-tap 我的)
+      if (state.drawerView === target || state.drawerView === 'pages') {
+        closeDrawer();
+        return;
+      }
+    }
+    openDrawer(target, $('#loginToggle'));
   });
   if (newSessionBtn) newSessionBtn.addEventListener('click', showNewSessionCard);
-  $('#myPagesToggle').addEventListener('click', function () { toggleMyPages(); });
-  $('#closeMyPages').addEventListener('click', function () { toggleMyPages(false); });
-  $('#myPagesList').addEventListener('click', function (e) {
-    var btn = e.target.closest('button[data-edit-slug]');
-    if (btn) enterOwnerEdit(btn.dataset.editSlug);
+  var openMyPagesBtn = $('#openMyPagesBtn');
+  if (openMyPagesBtn) {
+    openMyPagesBtn.addEventListener('click', function () {
+      setDrawerView('pages');
+      if (!isDrawerOpen()) openDrawer('pages', $('#loginToggle'));
+    });
+  }
+  var myPagesList = $('#myPagesList');
+  if (myPagesList) {
+    myPagesList.addEventListener('click', function (e) {
+      var btn = e.target.closest('button[data-edit-slug]');
+      if (btn) enterOwnerEdit(btn.dataset.editSlug);
+    });
+  }
+  var buyCreditsBtn = $('#buyCreditsBtn');
+  if (buyCreditsBtn) {
+    buyCreditsBtn.addEventListener('click', function () {
+      // Same shell switch — no flash close
+      if (isDrawerOpen()) setDrawerView('credits');
+      else openDrawer('credits', $('#loginToggle'));
+    });
+  }
+  var buyCreditsList = $('#buyCreditsList');
+  if (buyCreditsList) {
+    buyCreditsList.addEventListener('click', function (e) {
+      var btn = e.target.closest('button[data-buy-package]');
+      if (btn) createCreditOrder(btn.getAttribute('data-buy-package'), btn.getAttribute('data-channel-id') || '');
+    });
+  }
+  var payCheckBtn = $('#payCheckBtn');
+  if (payCheckBtn) payCheckBtn.addEventListener('click', function () { checkPayStatus(true); });
+  var quotaText = $('#quotaText');
+  if (quotaText) {
+    function onQuotaActivate() {
+      if (state.user && state.billing && state.billing.pay_enabled) {
+        if (isDrawerOpen() && state.drawerView === 'credits') closeDrawer();
+        else openDrawer('credits', quotaText);
+      } else if (!state.user) {
+        openDrawer('login', quotaText);
+        toast(t('buyCreditsLoginFirst'));
+      }
+    }
+    quotaText.addEventListener('click', onQuotaActivate);
+    quotaText.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        onQuotaActivate();
+      }
+    });
+  }
+  var closeDrawerBtn = $('#closeDrawer');
+  if (closeDrawerBtn) closeDrawerBtn.addEventListener('click', function () { closeDrawer(); });
+  var drawerBackBtn = $('#drawerBackBtn');
+  if (drawerBackBtn) {
+    drawerBackBtn.addEventListener('click', function () {
+      if (state.user) setDrawerView('account');
+      else closeDrawer();
+    });
+  }
+  var drawerBackdrop = $('#drawerBackdrop');
+  if (drawerBackdrop) {
+    drawerBackdrop.addEventListener('click', function () { closeDrawer(); });
+  }
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape' && isDrawerOpen()) {
+      e.preventDefault();
+      closeDrawer();
+    }
   });
+  // Also refresh me() billing after login
+  // (handled in existing verify/logout handlers via setBilling if response includes it)
   function loginHint(text) {
     var el = $('#loginHint');
     if (!text) { el.hidden = true; return; }
@@ -1263,20 +1735,32 @@
     });
   });
   $('#verifyCodeBtn').addEventListener('click', function () {
-    api('/api/auth/verify.php', { email: $('#loginEmail').value.trim(), code: $('#loginCode').value.trim() }).then(function (r) {
+    api('/api/auth/verify.php', {
+      email: $('#loginEmail').value.trim(),
+      code: $('#loginCode').value.trim(),
+      session_id: state.sessionId || ''
+    }).then(function (r) {
       if (r.error) { loginHint(r.error.message); return; }
       loginHint('');
       $('#loginCode').value = '';
       toast(t('loginSuccess'));
-      api('/api/auth/me.php', {}).then(function (me) { setUser(me.user); setQuota(me.quota); });
+      api('/api/auth/me.php', { session_id: state.sessionId || '' }).then(function (me) {
+        if (me.billing) setBilling(me.billing);
+        setUser(me.user);
+        setQuota(me.quota);
+      });
     });
   });
   $('#logoutBtn').addEventListener('click', function () {
     api('/api/auth/logout.php', {}).then(function () {
       loginHint('');
-      $('#accountBox').hidden = true;
+      closeDrawer();
       toast(t('logoutSuccess'));
-      api('/api/auth/me.php', {}).then(function (me) { setUser(me.user); setQuota(me.quota); }).catch(function () { setUser(null); });
+      api('/api/auth/me.php', { session_id: state.sessionId || '' }).then(function (me) {
+        if (me.billing) setBilling(me.billing);
+        setUser(me.user);
+        setQuota(me.quota);
+      }).catch(function () { setUser(null); });
     });
   });
   $('#loginEmail').addEventListener('keydown', function (e) {

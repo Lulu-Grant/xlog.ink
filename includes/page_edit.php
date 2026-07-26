@@ -2,6 +2,7 @@
 // Shared helpers for safe page edit sessions.
 
 require_once __DIR__ . '/db.php';
+require_once __DIR__ . '/mailer.php';
 
 function page_public_url($slug) {
     return 'https://' . $slug . '.xlog.ink/';
@@ -115,4 +116,179 @@ function create_page_edit_session(array $page, $mode) {
 function current_user_can_edit_page(array $page) {
     $userId = current_user_id();
     return $userId && !empty($page['owner_user_id']) && (int)$page['owner_user_id'] === (int)$userId;
+}
+
+/**
+ * Bind a chat session to a logged-in user when unbound or already theirs (G8).
+ * Requires session_access_allowed (same browser client_id / owner rules as other session APIs).
+ */
+function bind_session_to_user($sessionId, $userId) {
+    $sessionId = trim((string)$sessionId);
+    $userId = (int)$userId;
+    if ($userId <= 0 || !preg_match('/^[a-f0-9]{32}$/', $sessionId)) {
+        return ['ok' => false, 'error' => 'bad_request'];
+    }
+    $row = db_one('SELECT * FROM sessions WHERE id = ?', [$sessionId]);
+    if (!$row) {
+        return ['ok' => false, 'error' => 'not_found'];
+    }
+    // AUDIT-7 P1-1: knowing the session id alone is not enough.
+    if (!session_access_allowed($row)) {
+        return ['ok' => false, 'error' => 'forbidden_session'];
+    }
+    $existing = $row['user_id'] ?? null;
+    if ($existing !== null && $existing !== '' && (int)$existing !== $userId) {
+        return ['ok' => false, 'error' => 'owned_by_other', 'already' => true];
+    }
+    if ($existing !== null && $existing !== '' && (int)$existing === $userId) {
+        return ['ok' => true, 'already' => true, 'session_id' => $sessionId];
+    }
+    db_exec(
+        'UPDATE sessions SET user_id = ?, updated_at = ? WHERE id = ? AND (user_id IS NULL OR user_id = ?)',
+        [$userId, now_iso(), $sessionId, $userId]
+    );
+    return ['ok' => true, 'already' => false, 'session_id' => $sessionId];
+}
+
+/**
+ * Claim a page for a user when owner is null and an authorization rule passes.
+ *
+ * opts:
+ *  - session_id: claim if sessions.page_slug matches (same-session guest publish)
+ *  - email_match: claim if pages.email equals user email (case-insensitive)
+ *  - allow_already_owned_self: treat self-owned as success
+ *
+ * Never overwrites a non-null owner belonging to someone else (G2/G10).
+ */
+function claim_page_for_user($slug, $userId, array $opts = []) {
+    $slug = trim((string)$slug);
+    $userId = (int)$userId;
+    if ($slug === '' || $userId <= 0 || !preg_match('/^[a-z0-9]{3,10}$/', $slug)) {
+        return ['ok' => false, 'error' => 'bad_request'];
+    }
+
+    $page = db_one('SELECT slug, owner_user_id, email, session_id FROM pages WHERE slug = ?', [$slug]);
+    if (!$page) {
+        return ['ok' => false, 'error' => 'not_found'];
+    }
+
+    $owner = $page['owner_user_id'];
+    if ($owner !== null && $owner !== '' && (int)$owner > 0) {
+        if ((int)$owner === $userId) {
+            return ['ok' => true, 'already' => true, 'slug' => $slug];
+        }
+        return ['ok' => false, 'error' => 'already_owned', 'owner_user_id' => (int)$owner];
+    }
+
+    $allowed = false;
+    $via = null;
+
+    if (!empty($opts['session_id'])) {
+        $sid = trim((string)$opts['session_id']);
+        if (preg_match('/^[a-f0-9]{32}$/', $sid)) {
+            $sess = db_one('SELECT * FROM sessions WHERE id = ?', [$sid]);
+            // Must pass same browser/session access rules as chat APIs (P1-1).
+            $sessionUsable = $sess && session_access_allowed($sess);
+            if ($sessionUsable) {
+                $sessUser = $sess['user_id'] ?? null;
+                // Session must be unbound or already owned by claimer.
+                if ($sessUser !== null && $sessUser !== '' && (int)$sessUser !== $userId) {
+                    $sessionUsable = false;
+                }
+            }
+            if ($sessionUsable) {
+                if ((string)($sess['page_slug'] ?? '') === $slug) {
+                    $allowed = true;
+                    $via = 'session';
+                } elseif ((string)($page['session_id'] ?? '') === $sid) {
+                    $allowed = true;
+                    $via = 'page_session';
+                }
+            }
+        }
+    }
+
+    if (!$allowed && !empty($opts['email_match'])) {
+        $user = db_one('SELECT email FROM users WHERE id = ? AND status = ?', [$userId, 'active']);
+        $userEmail = normalize_email($user['email'] ?? '');
+        $pageEmail = normalize_email($page['email'] ?? '');
+        if ($userEmail !== '' && $pageEmail !== '' && $userEmail === $pageEmail) {
+            $allowed = true;
+            $via = 'email';
+        }
+    }
+
+    if (!$allowed) {
+        return ['ok' => false, 'error' => 'not_eligible'];
+    }
+
+    // Atomic null-owner claim only — never overwrite an existing owner.
+    $stmt = db()->prepare(
+        'UPDATE pages SET owner_user_id = ?, updated_at = ? WHERE slug = ? AND owner_user_id IS NULL'
+    );
+    $stmt->execute([$userId, now_iso(), $slug]);
+    if ($stmt->rowCount() === 0) {
+        // Race: another owner won, or already self.
+        $fresh = db_one('SELECT owner_user_id FROM pages WHERE slug = ?', [$slug]);
+        if ($fresh && (int)($fresh['owner_user_id'] ?? 0) === $userId) {
+            return ['ok' => true, 'already' => true, 'slug' => $slug, 'via' => $via];
+        }
+        return ['ok' => false, 'error' => 'already_owned'];
+    }
+    return ['ok' => true, 'already' => false, 'slug' => $slug, 'via' => $via];
+}
+
+/**
+ * After login: bind session + claim same-session page + email-matched orphan pages.
+ */
+function claim_pages_after_login($userId, $sessionId = null, $email = null) {
+    $userId = (int)$userId;
+    $results = ['session_bind' => null, 'session_claim' => null, 'email_claims' => []];
+    if ($userId <= 0) {
+        return $results;
+    }
+
+    $sessionId = $sessionId !== null ? trim((string)$sessionId) : '';
+    if ($sessionId !== '' && preg_match('/^[a-f0-9]{32}$/', $sessionId)) {
+        $results['session_bind'] = bind_session_to_user($sessionId, $userId);
+        // Only claim via session when bind succeeded (unbound or already ours).
+        // owned_by_other must not open a claim path for a foreign session.
+        $bindOk = !empty($results['session_bind']['ok']);
+        if ($bindOk) {
+            $sess = db_one('SELECT page_slug FROM sessions WHERE id = ?', [$sessionId]);
+            $slug = trim((string)($sess['page_slug'] ?? ''));
+            if ($slug !== '') {
+                $results['session_claim'] = claim_page_for_user($slug, $userId, ['session_id' => $sessionId]);
+            }
+        } else {
+            $results['session_claim'] = [
+                'ok' => false,
+                'error' => (string)($results['session_bind']['error'] ?? 'not_eligible'),
+            ];
+        }
+    }
+
+    if ($email === null) {
+        $user = db_one('SELECT email FROM users WHERE id = ?', [$userId]);
+        $email = $user['email'] ?? '';
+    }
+    $emailNorm = normalize_email($email);
+    if ($emailNorm === '') {
+        return $results;
+    }
+
+    // Limited batch: orphan pages whose guest email matches the account (G10).
+    $rows = db_all(
+        'SELECT slug FROM pages WHERE owner_user_id IS NULL AND email IS NOT NULL AND lower(email) = ? ORDER BY COALESCE(updated_at, created_at) DESC LIMIT 20',
+        [$emailNorm]
+    );
+    if (!is_array($rows)) {
+        $rows = [];
+    }
+    foreach ($rows as $row) {
+        $slug = (string)($row['slug'] ?? '');
+        if ($slug === '') continue;
+        $results['email_claims'][] = claim_page_for_user($slug, $userId, ['email_match' => true]);
+    }
+    return $results;
 }

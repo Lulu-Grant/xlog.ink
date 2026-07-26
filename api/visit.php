@@ -2,11 +2,17 @@
 require_once __DIR__ . '/../includes/db.php';
 
 try {
+    // Internal Playwright screenshot must not inflate visit stats (AUDIT-7 P2-3).
+    $internalShot = (string)($_GET['xlog_shot'] ?? $_POST['xlog_shot'] ?? '');
+    $uaEarly = (string)($_SERVER['HTTP_USER_AGENT'] ?? '');
+    if ($internalShot === '1' || stripos($uaEarly, 'xlog-shot') !== false || stripos($uaEarly, 'HeadlessChrome') !== false) {
+        // fall through to 1x1 gif without DB write
+    } else {
     $slug = strtolower(trim($_GET['slug'] ?? $_POST['slug'] ?? ''));
     if (preg_match('/^[a-z0-9]{3,20}$/', $slug)) {
         $page = db_one('SELECT slug FROM pages WHERE slug = ? AND status = ?', [$slug, 'live']);
         if ($page) {
-            $ua = substr((string)($_SERVER['HTTP_USER_AGENT'] ?? ''), 0, 500);
+            $ua = substr($uaEarly, 0, 500);
             $referer = substr((string)($_SERVER['HTTP_REFERER'] ?? ''), 0, 500);
             $path = substr((string)($_GET['path'] ?? $_POST['path'] ?? ''), 0, 300);
             $ip = client_ip();
@@ -30,6 +36,7 @@ try {
             }
         }
     }
+    } // end not-internal-shot
 } catch (Throwable $e) {
     error_log('visit tracking failed: ' . $e->getMessage());
 }
